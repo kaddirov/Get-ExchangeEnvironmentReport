@@ -6,7 +6,7 @@
 A high-performance PowerShell script to generate **modern HTML dashboards** for your Microsoft Exchange Server infrastructure.
 
 ## ⭐ Credits & Acknowledgements
-This project is a modernized **3.0** evolution by **B.O (Community Contributor)** based on the original work by **Steve Goodman** and **Thomas Stensitzki**.
+This project is a modernized **3.0** evolution by **B.O** based on the original work by **Steve Goodman** and **Thomas Stensitzki**.
 *   Original Script: [Get-ExchangeEnvironmentReport](https://github.com/Apoc70/Get-ExchangeEnvironmentReport/blob/master/Get-ExchangeEnvironmentReport.ps1)
 
 ---
@@ -73,4 +73,4 @@ This script is a "Community Standard". Feel free to open Pull Requests to add DA
 
 ---
 **License:** MIT
-**Author:** Community Contributor
+**Author:** B.O

@@ -1,7 +1,7 @@
 <#
     .SYNOPSIS
     Exchange Environment Report - 3.0
-    Author: B.O (Community Contributor)
+    Author: B.O
     Modernized for Exchange 2016+ (SE Support)
     Performance: Utilizing lookup tables and bulk collections.
 #>
