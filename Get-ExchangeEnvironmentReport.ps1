@@ -1,7 +1,7 @@
 <#
     .SYNOPSIS
-    .SYNOPSIS
-    Exchange Environment Report - V3.0 (Community Standard)
+    Exchange Environment Report - 3.0
+    Author: B.O (Community Contributor)
     Modernized for Exchange 2016+ (SE Support)
     Performance: Utilizing lookup tables and bulk collections.
 #>
@@ -136,7 +136,7 @@ $TotalSizeGB = "{0:N2}" -f ($TotalSize / 1GB)
 # --- HTML GENERATION ---
 $ReportDate = Get-Date -Format "dd/MM/yyyy HH:mm:ss"
 $Output = @"
-<!DOCTYPE html><html><head><title>Exchange Report V3.0</title>
+<!DOCTYPE html><html><head><title>Exchange Report 3.0</title>
 <meta charset="UTF-8">
 <style>
     body { font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif; background-color: #F5F5F5; margin: 0; padding: 20px; color: #333; }
@@ -219,6 +219,6 @@ foreach ($D in $EnvData.DBs) {
 }
 $Output += "</tbody></table></div><div class='footer'>&copy; $(Get-Date -Format 'yyyy') $CompanyLogo - $ReportTitle</div></body></html>"
 $Output | Out-File $HTMLReport -Encoding utf8
-Log "Report V3.0 (Community Standard) completed : $HTMLReport" "Green"
+Log "Report 3.0 completed : $HTMLReport" "Green"
 
 
