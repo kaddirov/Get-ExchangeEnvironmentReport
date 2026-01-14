@@ -1,0 +1,6 @@
+# Exclude local corporate backup (French version)
+Get-ExchangeEnvironmentReport_V2.ps1
+
+# Exclude temp files
+*.tmp
+*.log
