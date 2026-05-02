@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Exchange Report 3.0 - Demo</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif;
+            background-color: #F5F5F5;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        .header {
+            text-align: center;
+            padding: 40px 0 20px 0;
+            background: transparent;
+            color: #333;
+            margin-bottom: 0;
+            box-shadow: none;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-weight: 300;
+            font-size: 32px;
+            color: #1A1A1A;
+        }
+
+        .header h1 span {
+            color: #0078D4;
+            font-weight: 600;
+        }
+
+        .header p {
+            margin: 5px 0 0;
+            color: #999;
+            font-size: 13px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            width: 98%;
+            margin: 0 auto;
+        }
+
+        h3 {
+            color: #1A1A1A;
+            border-bottom: 2px solid #0078D4;
+            padding-bottom: 10px;
+            margin-top: 30px;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+
+        th {
+            cursor: pointer;
+            background: #1A1A1A;
+            color: white;
+            padding: 12px 15px;
+            font-weight: 500;
+            text-align: center;
+            border-top: 3px solid #0078D4;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+            text-align: center;
+            color: #444;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        tbody tr:hover {
+            background-color: #f0f7ff;
+        }
+
+        .dashboard {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            flex: 1;
+            min-width: 150px;
+            border-top: 3px solid #0078D4;
+        }
+
+        .card h2 {
+            margin: 0;
+            font-size: 32px;
+            color: #1A1A1A;
+        }
+
+        .card p {
+            margin: 5px 0 0;
+            color: #666;
+            font-size: 13px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .progress-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .progress-bg {
+            background: #eee;
+            height: 12px;
+            border-radius: 6px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            border-radius: 6px;
+        }
+
+        .progress-text {
+            font-weight: bold;
+            font-size: 11px;
+            min-width: 35px;
+            text-align: right;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1><span>TECH-CORP</span> INFRASTRUCTURE STATUS</h1>
+        <p>Exchange Global Environment &bull; 14/01/2026 15:30:00</p>
+    </div>
+    <div class="container">
+        <div class="dashboard">
+            <div class="card">
+                <h2>12,450</h2>
+                <p>Active Mailboxes</p>
+            </div>
+            <div class="card">
+                <h2>2,840</h2>
+                <p>Archive Mailboxes</p>
+            </div>
+            <div class="card">
+                <h2>4,120.50 <small style="font-size:16px;">GB</small></h2>
+                <p>Total Volume</p>
+            </div>
+            <div class="card">
+                <h2>4 / 4</h2>
+                <p>Servers Online</p>
+            </div>
+        </div>
+
+        <h3>Site: Paris</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>Version</th>
+                    <th>Build</th>
+                    <th>Roles</th>
+                    <th>Mailboxes</th>
+                    <th>Certificate</th>
+                    <th>OS</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><b>EXCH-PAR-01</b></td>
+                    <td>2019 / SE</td>
+                    <td style='font-size:8pt;'>15.2.1118.7</td>
+                    <td>Mailbox</td>
+                    <td>3100</td>
+                    <td style='color:green;font-weight:bold;'>OK (240 d)</td>
+                    <td style='font-size:8pt;'>Windows Server 2022 Datacenter</td>
+                </tr>
+                <tr>
+                    <td><b>EXCH-PAR-02</b></td>
+                    <td>2019 / SE</td>
+                    <td style='font-size:8pt;'>15.2.1118.7</td>
+                    <td>Mailbox</td>
+                    <td>3100</td>
+                    <td style='color:green;font-weight:bold;'>OK (185 d)</td>
+                    <td style='font-size:8pt;'>Windows Server 2022 Datacenter</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Site: London</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>Version</th>
+                    <th>Build</th>
+                    <th>Roles</th>
+                    <th>Mailboxes</th>
+                    <th>Certificate</th>
+                    <th>OS</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><b>EXCH-LON-01</b></td>
+                    <td>2019 / SE</td>
+                    <td style='font-size:8pt;'>15.2.1118.7</td>
+                    <td>Mailbox</td>
+                    <td>3125</td>
+                    <td style='color:orange;font-weight:bold;'>Expires in 12 d</td>
+                    <td style='font-size:8pt;'>Windows Server 2019 Standard</td>
+                </tr>
+                <tr>
+                    <td><b>EXCH-LON-02</b></td>
+                    <td>2019 / SE</td>
+                    <td style='font-size:8pt;'>15.2.1118.7</td>
+                    <td>Mailbox</td>
+                    <td>3125</td>
+                    <td style='color:green;font-weight:bold;'>OK (92 d)</td>
+                    <td style='font-size:8pt;'>Windows Server 2019 Standard</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Database Status</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>Database</th>
+                    <th>Mailboxes</th>
+                    <th>Avg. Size</th>
+                    <th>Archives</th>
+                    <th>Avg. Arc. Size</th>
+                    <th>DB Size</th>
+                    <th>Whitespace</th>
+                    <th>Free DB</th>
+                    <th>Free Log</th>
+                    <th>Last Backup</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>EXCH-PAR-01</td>
+                    <td align='left'>DB-VIP-01</td>
+                    <td>450</td>
+                    <td>1.20 GB</td>
+                    <td>50</td>
+                    <td>0.80 GB</td>
+                    <td style='font-weight:bold;'>540.00 GB</td>
+                    <td>25.40 GB</td>
+                    <td>
+                        <div class='progress-container'>
+                            <div class='progress-bg'>
+                                <div class='progress-bar' style='width:65%;background:#2e7d32;'></div>
+                            </div>
+                            <div class='progress-text'>65%</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class='progress-container'>
+                            <div class='progress-bg'>
+                                <div class='progress-bar' style='width:82%;background:#2e7d32;'></div>
+                            </div>
+                            <div class='progress-text'>82%</div>
+                        </div>
+                    </td>
+                    <td style='font-size:8pt;color:#666;'>14/01/2026 01:00</td>
+                </tr>
+                <tr>
+                    <td>EXCH-LON-02</td>
+                    <td align='left'>DB-PROD-04</td>
+                    <td>2200</td>
+                    <td>0.95 GB</td>
+                    <td>180</td>
+                    <td>1.10 GB</td>
+                    <td style='font-weight:bold;'>2090.00 GB</td>
+                    <td>110.15 GB</td>
+                    <td>
+                        <div class='progress-container'>
+                            <div class='progress-bg'>
+                                <div class='progress-bar' style='width:18%;background:#ff9800;'></div>
+                            </div>
+                            <div class='progress-text'>18%</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class='progress-container'>
+                            <div class='progress-bg'>
+                                <div class='progress-bar' style='width:45%;background:#2e7d32;'></div>
+                            </div>
+                            <div class='progress-text'>45%</div>
+                        </div>
+                    </td>
+                    <td style='font-size:8pt;color:#666;'>14/01/2026 02:30</td>
+                </tr>
+                <tr>
+                    <td>EXCH-PAR-02</td>
+                    <td align='left'>DB-TEMP-99</td>
+                    <td>150</td>
+                    <td>0.50 GB</td>
+                    <td>0</td>
+                    <td>0.00 GB</td>
+                    <td style='font-weight:bold;'>75.00 GB</td>
+                    <td>40.00 GB</td>
+                    <td>
+                        <div class='progress-container'>
+                            <div class='progress-bg'>
+                                <div class='progress-bar' style='width:8%;background:#d32f2f;'></div>
+                            </div>
+                            <div class='progress-text'>8%</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class='progress-container'>
+                            <div class='progress-bg'>
+                                <div class='progress-bar' style='width:9%;background:#d32f2f;'></div>
+                            </div>
+                            <div class='progress-text'>9%</div>
+                        </div>
+                    </td>
+                    <td style='font-size:8pt;color:#666;'>None</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class='footer'>&copy; 2026 TECH-CORP - GLOBAL EXCHANGE STATUS</div>
+</body>
+
+</html>

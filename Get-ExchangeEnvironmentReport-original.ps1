@@ -1,8 +1,9 @@
 <#
     .SYNOPSIS
-    Exchange Environment Report - V3.0 (ENSP Edition)
+    Exchange Environment Report - 3.0
+    Author: B.O
     Modernized for Exchange 2016+ (SE Support)
-    Performance: Utilisation de lookup tables et collectes groupées.
+    Performance: Utilizing lookup tables and bulk collections.
 #>
 param(
     [parameter(Position = 0, Mandatory = $true)][string]$HTMLReport,
@@ -10,7 +11,10 @@ param(
     [parameter(Position = 2)][string]$MailFrom,
     [parameter(Position = 3)]$MailTo,
     [parameter(Position = 4)][string]$MailServer,
-    [parameter(Position = 5)][string]$ServerFilter = "*"
+    [parameter(Position = 5)][string]$ServerFilter = "*",
+    [string]$CompanyLogo = "EXCHANGE",
+    [string]$ReportTitle = "REPORTING",
+    [string]$ThemeColor = "#F27A00" # Default Color (ENSP Orange) - Customizable to #0078D4 (Blue) etc.
 )
 $Global:Sw = [System.Diagnostics.Stopwatch]::StartNew()
 function Log($Msg, $Color = "White") { Write-Host "[$($Global:Sw.Elapsed.ToString("mm\:ss"))] $Msg" -ForegroundColor $Color -NoNewline:$false }
@@ -21,14 +25,14 @@ function _GetSSLCertStatus {
     param($ServerName)
     try {
         $Certs = Get-ExchangeCertificate -Server $ServerName -ErrorAction SilentlyContinue | Where-Object { $_.Services -match "IIS|SMTP" }
-        if (!$Certs) { return @{ Status = "Inconnu"; Color = "gray" } }
+        if (!$Certs) { return @{ Status = "Unknown"; Color = "gray" } }
         $MinExpiry = $Certs | Sort-Object NotAfter | Select-Object -First 1
         $DaysLeft = ($MinExpiry.NotAfter - (Get-Date)).Days
-        if ($DaysLeft -lt 0) { return @{ Status = "Expiré !"; Color = "red" } }
-        if ($DaysLeft -lt 30) { return @{ Status = "Expire dans $DaysLeft j"; Color = "orange" } }
-        return @{ Status = "OK ($DaysLeft j)"; Color = "green" }
+        if ($DaysLeft -lt 0) { return @{ Status = "Expired!"; Color = "red" } }
+        if ($DaysLeft -lt 30) { return @{ Status = "Expires in $DaysLeft d"; Color = "orange" } }
+        return @{ Status = "OK ($DaysLeft d)"; Color = "green" }
     }
-    catch { return @{ Status = "Erreur"; Color = "red" } }
+    catch { return @{ Status = "Error"; Color = "red" } }
 }
 
 function _GetDB {
@@ -63,14 +67,14 @@ function _GetDB {
 
     @{Name = $DbName; ActiveOwner = $Database.Server.Name.ToUpper(); MailboxCount = $MBCount; MailboxAverageSize = $AvgMBSize; 
         ArchiveMailboxCount = $ArcCount; ArchiveAverageSize = $AvgArcSize; Size = $Database.DatabaseSize.ToBytes(); 
-        Whitespace = $Database.AvailableNewMailboxSpace.ToBytes(); LastFullBackup = $(if ($Database.LastFullBackup) { $Database.LastFullBackup.ToString() }else { "Aucune" });
+        Whitespace = $Database.AvailableNewMailboxSpace.ToBytes(); LastFullBackup = $(if ($Database.LastFullBackup) { $Database.LastFullBackup.ToString() }else { "None" });
         FreeDatabaseDiskSpace = $FreeDBDisk; FreeLogDiskSpace = $FreeLogDisk
     }
 }
 
 function _GetExSvr {
     param($Svr, $MailboxesByDB)
-    Log "Collecte $($Svr.Name)..." "Gray"
+    Log "Collecting $($Svr.Name)..." "Gray"
     
     # ExSetup Version (Precise)
     $ExSetupVer = try { Invoke-Command -ComputerName $Svr.Name -ScriptBlock { (Get-Command "C:\Program Files\Microsoft\Exchange Server\V15\bin\ExSetup.exe").FileVersionInfo.FileVersion } -ErrorAction SilentlyContinue } catch { $null }
@@ -106,9 +110,9 @@ function _GetExSvr {
 
 # --- PROCESS ---
 $ExBin = "C:\Program Files\Microsoft\Exchange Server\V15\bin\RemoteExchange.ps1"
-if (!(Get-Command Get-ExchangeServer -ErrorAction SilentlyContinue)) { if (Test-Path $ExBin) { . $ExBin; Connect-ExchangeServer -auto } else { throw "Lancer depuis EMS" } }
+if (!(Get-Command Get-ExchangeServer -ErrorAction SilentlyContinue)) { if (Test-Path $ExBin) { . $ExBin; Connect-ExchangeServer -auto } else { throw "Launch from EMS" } }
 
-Log "Collecte Globale (Requête unique optimisée V2.8)..." "Cyan"
+Log "Global Collection (Optimized Single-Query V3.0)..." "Cyan"
 $AllMbx = Get-Mailbox -ResultSize Unlimited | Select-Object Database, ArchiveDatabase, Identity
 $MailboxesByDB = $AllMbx | Group-Object Database -AsHashTable -AsString
 $ArchivesByDB = $AllMbx | Where-Object { $_.ArchiveDatabase } | Group-Object ArchiveDatabase -AsHashTable -AsString
@@ -123,7 +127,7 @@ foreach ($S in $ExchangeServers) {
 }
 foreach ($D in $Databases) { $EnvData.DBs += _GetDB -Database $D -ExSvrData $EnvData.Servers[$D.Server.Name] -MailboxesByDB $MailboxesByDB -ArchivesByDB $ArchivesByDB }
 
-# --- CALCULS KPI V1.9.1 ---
+# --- KPI CALCULATIONS V1.9.1 ---
 $TotalMB = 0; $TotalArc = 0; $TotalSize = 0; $SvrOK = 0; $SvrTotal = $EnvData.Servers.Count
 foreach ($S in $EnvData.Servers.Values) { if ($S.CertStatus.Status -like "*OK*") { $SvrOK++ } }
 foreach ($D in $EnvData.DBs) { $TotalMB += $D.MailboxCount; $TotalArc += $D.ArchiveMailboxCount; $TotalSize += $D.Size }
@@ -132,23 +136,23 @@ $TotalSizeGB = "{0:N2}" -f ($TotalSize / 1GB)
 # --- HTML GENERATION ---
 $ReportDate = Get-Date -Format "dd/MM/yyyy HH:mm:ss"
 $Output = @"
-<!DOCTYPE html><html><head><title>Exchange Report V3.0 - ENSP</title>
+<!DOCTYPE html><html><head><title>Exchange Report 3.0</title>
 <meta charset="UTF-8">
 <style>
     body { font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif; background-color: #F5F5F5; margin: 0; padding: 20px; color: #333; }
     .header { text-align: center; padding: 40px 0 20px 0; background: transparent; color: #333; margin-bottom: 0; box-shadow: none; }
     .header h1 { margin: 0; font-weight: 300; font-size: 32px; color: #1A1A1A; }
-    .header h1 span { color: #F27A00; font-weight: 600; }
+    .header h1 span { color: $ThemeColor; font-weight: 600; }
     .header p { margin: 5px 0 0; color: #999; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
     .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 98%; margin: 0 auto; }
-    h3 { color: #1A1A1A; border-bottom: 2px solid #F27A00; padding-bottom: 10px; margin-top: 30px; font-weight: 600; }
+    h3 { color: #1A1A1A; border-bottom: 2px solid $ThemeColor; padding-bottom: 10px; margin-top: 30px; font-weight: 600; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 14px; }
-    th { cursor: pointer; background: #1A1A1A; color: white; padding: 12px 15px; font-weight: 500; text-align: center; border-top: 3px solid #F27A00; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+    th { cursor: pointer; background: #1A1A1A; color: white; padding: 12px 15px; font-weight: 500; text-align: center; border-top: 3px solid $ThemeColor; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
     td { padding: 10px 15px; border-bottom: 1px solid #eee; text-align: center; color: #444; }
     tbody tr:nth-child(even) { background-color: #fafafa; }
     tbody tr:hover { background-color: #fff8f0; }
     .dashboard { display: flex; justify-content: space-between; margin-bottom: 25px; gap: 20px; flex-wrap: wrap; }
-    .card { background: white; padding: 20px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; flex: 1; min-width: 150px; border-top: 3px solid #F27A00; }
+    .card { background: white; padding: 20px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; flex: 1; min-width: 150px; border-top: 3px solid $ThemeColor; }
     .card h2 { margin: 0; font-size: 32px; color: #1A1A1A; }
     .card p { margin: 5px 0 0; color: #666; font-size: 13px; text-transform: uppercase; font-weight: bold; }
     .progress-container { display: flex; align-items: center; gap: 8px; }
@@ -172,23 +176,23 @@ $Output = @"
 </head>
 <body>
 <div class="header">
-    <h1><span>ENSP</span> REPORTING</h1>
-    <p>Infrastructure Exchange &bull; $ReportDate</p>
+    <h1><span>$CompanyLogo</span> $ReportTitle</h1>
+    <p>Exchange Infrastructure &bull; $ReportDate</p>
 </div>
 <div class="container">
     <div class="dashboard">
-        <div class="card"><h2>$TotalMB</h2><p>Bo&icirc;tes Actives</p></div>
-        <div class="card"><h2>$TotalArc</h2><p>Bo&icirc;tes Archives</p></div>
-        <div class="card"><h2>$TotalSizeGB <small style="font-size:16px;">GB</small></h2><p>Volum&eacute;trie Totale</p></div>
-        <div class="card"><h2>$SvrOK / $SvrTotal</h2><p>Serveurs En Ligne</p></div>
+        <div class="card"><h2>$TotalMB</h2><p>Active Mailboxes</p></div>
+        <div class="card"><h2>$TotalArc</h2><p>Archive Mailboxes</p></div>
+        <div class="card"><h2>$TotalSizeGB <small style="font-size:16px;">GB</small></h2><p>Total Volume</p></div>
+        <div class="card"><h2>$SvrOK / $SvrTotal</h2><p>Servers Online</p></div>
     </div>
 "@
 
 foreach ($Site in $EnvData.Sites.GetEnumerator()) {
     $tid = "t_" + $Site.Key.Replace(" ", "")
     $Output += "<h3>Site: $($Site.Key)</h3><table id='$tid'><thead><tr>
-    <th onclick='sortTable(""$tid"",0,0)'>Serveur</th><th onclick='sortTable(""$tid"",1,0)'>Version</th><th onclick='sortTable(""$tid"",2,0)'>Build</th>
-    <th onclick='sortTable(""$tid"",3,0)'>R&ocirc;les</th><th onclick='sortTable(""$tid"",4,1)'>Bo&icirc;tes</th><th onclick='sortTable(""$tid"",5,0)'>Certificat</th>
+    <th onclick='sortTable(""$tid"",0,0)'>Server</th><th onclick='sortTable(""$tid"",1,0)'>Version</th><th onclick='sortTable(""$tid"",2,0)'>Build</th>
+    <th onclick='sortTable(""$tid"",3,0)'>Roles</th><th onclick='sortTable(""$tid"",4,1)'>Mailboxes</th><th onclick='sortTable(""$tid"",5,0)'>Certificate</th>
     <th onclick='sortTable(""$tid"",6,0)'>OS</th></tr></thead><tbody>"
     foreach ($S in $Site.Value) {
         $Output += "<tr><td><b>$($S.Name)</b></td><td>$($S.DisplayVer)</td><td style='font-size:8pt;'>$($S.Build)</td><td>$($S.Roles -join ", ")</td>
@@ -197,11 +201,11 @@ foreach ($Site in $EnvData.Sites.GetEnumerator()) {
     $Output += "</tbody></table>"
 }
 
-$Output += "<h3>&Eacute;tat des Bases de Donn&eacute;es</h3><table id='dbt'><thead><tr>
-<th onclick='sortTable(""dbt"",0,0)'>Serveur</th><th onclick='sortTable(""dbt"",1,0)'>Base</th><th onclick='sortTable(""dbt"",2,1)'>Bo&icirc;tes</th>
-<th onclick='sortTable(""dbt"",3,1)'>Taille Moy.</th><th onclick='sortTable(""dbt"",4,1)'>Archives</th><th onclick='sortTable(""dbt"",5,1)'>Taille Moy. Arc.</th>
-<th onclick='sortTable(""dbt"",6,1)'>Taille DB</th><th onclick='sortTable(""dbt"",7,1)'>Espace Blanc</th>
-<th onclick='sortTable(""dbt"",8,1)'>DB Libre</th><th onclick='sortTable(""dbt"",9,1)'>Log Libre</th><th onclick='sortTable(""dbt"",10,0)'>Dernier Backup</th></tr></thead><tbody>"
+$Output += "<h3>Database Status</h3><table id='dbt'><thead><tr>
+<th onclick='sortTable(""dbt"",0,0)'>Server</th><th onclick='sortTable(""dbt"",1,0)'>Database</th><th onclick='sortTable(""dbt"",2,1)'>Mailboxes</th>
+<th onclick='sortTable(""dbt"",3,1)'>Avg. Size</th><th onclick='sortTable(""dbt"",4,1)'>Archives</th><th onclick='sortTable(""dbt"",5,1)'>Avg. Arc. Size</th>
+<th onclick='sortTable(""dbt"",6,1)'>DB Size</th><th onclick='sortTable(""dbt"",7,1)'>Whitespace</th>
+<th onclick='sortTable(""dbt"",8,1)'>Free DB</th><th onclick='sortTable(""dbt"",9,1)'>Free Log</th><th onclick='sortTable(""dbt"",10,0)'>Last Backup</th></tr></thead><tbody>"
 foreach ($D in $EnvData.DBs) {
     $pctDB = $D.FreeDatabaseDiskSpace; $colDB = if ($pctDB -lt 10) { "#d32f2f" }elseif ($pctDB -lt 20) { "#ff9800" }else { "#2e7d32" }
     $pctLog = $D.FreeLogDiskSpace; $colLog = if ($pctLog -lt 10) { "#d32f2f" }elseif ($pctLog -lt 20) { "#ff9800" }else { "#2e7d32" }
@@ -213,40 +217,8 @@ foreach ($D in $EnvData.DBs) {
     <td><div class='progress-container'><div class='progress-bg'><div class='progress-bar' style='width:$($pctLog)%;background:$colLog;'></div></div><div class='progress-text'>$('{0:N0}' -f $pctLog)%</div></div></td>
     <td style='font-size:8pt;color:#666;'>$($D.LastFullBackup)</td></tr>"
 }
-$Output += "</tbody></table></div><div class='footer'>&copy; 2026 ENSP - Exchange Reporting System</div></body></html>"
+$Output += "</tbody></table></div><div class='footer'>&copy; $(Get-Date -Format 'yyyy') $CompanyLogo - $ReportTitle</div></body></html>"
 $Output | Out-File $HTMLReport -Encoding utf8
-Log "Rapport V3.0 (ENSP Edition) terminé : $HTMLReport" "Green"
+Log "Report 3.0 completed : $HTMLReport" "Green"
 
-# --- CONFIGURATION (IIS Default Document) ---
-try {
-    $ReportDir = [System.IO.Path]::GetDirectoryName($HTMLReport)
-    $ReportFile = [System.IO.Path]::GetFileName($HTMLReport)
-    $WebConfigPath = Join-Path $ReportDir "web.config"
-    
-    # Configuration "Page par défaut" pour accéder via le dossier
-    $WebConfigContent = @"
-<?xml version="1.0" encoding="UTF-8"?>
-<configuration>
-    <system.webServer>
-        <defaultDocument enabled="true">
-            <files>
-                <clear />
-                <add value="$ReportFile" />
-            </files>
-        </defaultDocument>
-    </system.webServer>
-</configuration>
-"@
-    $CurrentConfig = if (Test-Path $WebConfigPath) { Get-Content $WebConfigPath -Raw -ErrorAction SilentlyContinue } else { "" }
-    # Normalisation pour comparaison (suppression retours chariots)
-    if ($CurrentConfig.Trim() -ne $WebConfigContent.Trim()) {
-        $WebConfigContent | Out-File $WebConfigPath -Encoding utf8
-        Log " - Config IIS mise à jour (Un court arrêt est normal)" "Yellow"
-    }
-    else {
-        Log " - Config IIS déjà optimale (Aucun impact)" "Green"
-    }
-}
-catch {
-    Log " - Erreur config IIS : $($_.Exception.Message)" "Red"
-}
+
