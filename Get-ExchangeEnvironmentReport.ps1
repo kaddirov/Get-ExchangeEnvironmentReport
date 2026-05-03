@@ -169,7 +169,10 @@ $Output = @"
     .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 98%; margin: 0 auto; }
     h3 { color: #1A1A1A; border-bottom: 2px solid #F27A00; padding-bottom: 10px; margin-top: 30px; font-weight: 600; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 14px; }
-    th { cursor: pointer; background: #1A1A1A; color: white; padding: 12px 15px; font-weight: 500; text-align: center; border-top: 3px solid #F27A00; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+    th { cursor: pointer; background: #1A1A1A; color: white; padding: 12px 8px; font-weight: 500; text-align: center; border-top: 3px solid #F27A00; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; position: relative; transition: background 0.2s; }
+    th:hover { background: #222; }
+    .th-content { display: flex; align-items: center; justify-content: center; gap: 5px; margin-right: 15px; margin-left: 15px; }
+    .sort-indicator { font-size: 10px; opacity: 0.7; }
     td { padding: 10px 15px; border-bottom: 1px solid #eee; text-align: center; color: #444; }
     tbody tr:nth-child(even) { background-color: #fafafa; }
     tbody tr:hover { background-color: #fff8f0; }
@@ -184,26 +187,32 @@ $Output = @"
     .footer { text-align: center; font-size: 12px; color: #999; margin-top: 40px; }
     
     /* Styles du Filtre */
-    .filter-icon { cursor: pointer; color: #888; margin-right: 8px; font-size: 11px; transition: color 0.2s; vertical-align: middle; }
-    .filter-icon:hover { color: #F27A00; }
-    .filter-active { color: #F27A00 !important; font-weight: bold; }
+    .filter-icon { 
+        position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+        cursor: pointer; color: rgba(255,255,255,0.5); padding: 4px; border-radius: 3px;
+        transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center;
+        background: transparent; border: 1px solid transparent; z-index: 2;
+    }
+    .filter-icon:hover { background: rgba(255,255,255,0.15); color: #F27A00; }
+    .filter-icon svg { width: 12px; height: 12px; display: block; }
+    .filter-icon.filter-active { color: #F27A00 !important; background: rgba(242,122,0,0.2); border-color: rgba(242,122,0,0.4); }
     .filter-menu {
-        position: absolute; background: white; color: #333; border: 1px solid #ccc; border-radius: 4px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15); padding: 5px 0; z-index: 1000;
-        max-height: 250px; overflow-y: auto; font-size: 13px; font-weight: normal; text-transform: none; min-width: 150px;
+        position: fixed; background: white; color: #333; border: 1px solid #ccc; border-radius: 4px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15); padding: 5px 0; z-index: 9999;
+        font-size: 13px; font-weight: normal; text-transform: none; letter-spacing: normal; min-width: 160px;
     }
     .filter-menu div { padding: 8px 15px; cursor: pointer; transition: background 0.2s; text-align: left; display: flex; align-items: center; }
     .filter-menu div:hover { background: #f0f7ff; }
-    .filter-menu label { cursor: pointer; flex: 1; margin-left: 8px; }
-    .filter-menu input[type="checkbox"] { cursor: pointer; width: 14px; height: 14px; }
-    .filter-menu hr { margin: 5px 0; border: 0; border-top: 1px solid #eee; }
-    .filter-footer { padding: 10px; text-align: right; background: #fafafa; border-top: 1px solid #eee; }
+    .filter-menu label { cursor: pointer; flex: 1; margin-left: 8px; white-space: nowrap; }
+    .filter-menu input[type="checkbox"] { cursor: pointer; width: 14px; height: 14px; flex-shrink: 0; }
+    .filter-menu hr { margin: 5px 0; border: 0; border-top: 1px solid #eee; padding: 0; display: block; cursor: default; }
+    .filter-footer { padding: 8px 10px; text-align: right; background: #fafafa; border-top: 1px solid #eee; cursor: default; }
     .filter-btn { padding: 4px 12px; cursor: pointer; border-radius: 3px; border: 1px solid #ccc; background: white; font-size: 11px; transition: all 0.2s; }
     .filter-btn-primary { background: #F27A00; color: white; border-color: #d66c00; font-weight: bold; }
     .filter-btn:hover { background: #f0f0f0; }
     .filter-btn-primary:hover { background: #d66c00; }
     
-    /* Styles Certificats Ultra-Compact Corrigé */
+    /* Styles Certificats Ultra-Compact */
     .cert-container { text-align: left; min-width: 350px; }
     .cert-item { display: flex; align-items: center; white-space: nowrap; margin-bottom: 3px; padding: 2px 0; border-bottom: 1px solid #f9f9f9; }
     .cert-item:last-child { border-bottom: none; }
@@ -226,129 +235,191 @@ $Output = @"
     }
 </style>
 <script>
+    /* === TRI === */
     function sortTable(tid, n, num) {
-        var t = document.getElementById(tid), r = Array.from(t.rows).slice(1), dir = t.dataset.dir === 'asc' ? -1 : 1;
-        r.sort((a, b) => {
-            let v1 = a.cells[n].innerText, v2 = b.cells[n].innerText;
-            if (num) { v1 = parseFloat(v1.replace(/[^\d.-]/g, '')) || 0; v2 = parseFloat(v2.replace(/[^\d.-]/g, '')) || 0; }
-            return v1 > v2 ? dir : -dir;
+        var t = document.getElementById(tid);
+        if (!t) return;
+        var rows = Array.from(t.tBodies[0].rows);
+        var dir = (t.dataset.sortCol == n && t.dataset.sortDir === 'asc') ? 'desc' : 'asc';
+        var mult = dir === 'asc' ? 1 : -1;
+
+        t.querySelectorAll('.sort-indicator').forEach(function(si) { si.textContent = ''; });
+
+        rows.sort(function(a, b) {
+            var v1 = a.cells[n] ? a.cells[n].innerText.trim() : '';
+            var v2 = b.cells[n] ? b.cells[n].innerText.trim() : '';
+            if (num) {
+                v1 = parseFloat(v1.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+                v2 = parseFloat(v2.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+            }
+            if (v1 < v2) return -1 * mult;
+            if (v1 > v2) return 1 * mult;
+            return 0;
         });
-        r.forEach(row => t.tBodies[0].appendChild(row));
-        t.dataset.dir = dir === 1 ? 'asc' : 'desc';
+        rows.forEach(function(row) { t.tBodies[0].appendChild(row); });
+
+        t.dataset.sortCol = n;
+        t.dataset.sortDir = dir;
+        var th = t.querySelectorAll('thead th')[n];
+        if (th) {
+            var ind = th.querySelector('.sort-indicator');
+            if (ind) ind.innerHTML = dir === 'asc' ? ' &#9652;' : ' &#9662;';
+        }
     }
 
+    /* === FILTRES === */
     function initFilters(tableId) {
-        const table = document.getElementById(tableId);
-        if (!table) return;
-        const headers = table.querySelectorAll('th');
-        const tbody = table.querySelector('tbody');
-        table.originalRows = Array.from(tbody.querySelectorAll('tr'));
-        table.activeFilters = {};
+        var table = document.getElementById(tableId);
+        if (!table || !table.querySelector('tbody')) return;
+        var headers = table.querySelectorAll('thead th');
+        if (headers.length === 0) return;
 
-        headers.forEach((th, index) => {
-            const icon = document.createElement('span');
+        table._origRows = Array.from(table.tBodies[0].rows);
+        table._filters = {};
+
+        headers.forEach(function(th, idx) {
+            var colName = th.textContent.trim();
+            var isNum = /Boites|Bo.tes|Taille|Espace|Libre|Archives/i.test(
+                colName.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            );
+
+            th.innerHTML = '<div class="th-content"><span>' + colName + '</span><span class="sort-indicator"></span></div>';
+
+            var icon = document.createElement('span');
             icon.className = 'filter-icon';
-            icon.innerHTML = '\u25BC';
-            icon.onclick = function(e) { e.stopPropagation(); showFilterMenu(table, th, index, icon); };
-            th.insertBefore(icon, th.firstChild);
+            icon.title = 'Filtrer';
+            icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>';
+            th.appendChild(icon);
+
+            icon.addEventListener('click', function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                showFilterMenu(table, th, idx, icon);
+            });
+
+            th.addEventListener('click', function(e) {
+                if (e.target.closest('.filter-icon')) return;
+                sortTable(tableId, idx, isNum);
+            });
         });
     }
 
     function showFilterMenu(table, th, colIndex, icon) {
-        let existing = document.querySelector('.filter-menu');
-        if (existing) existing.remove();
-        
-        const values = new Set();
-        table.originalRows.forEach(row => { if(row.cells[colIndex]) values.add(row.cells[colIndex].innerText.trim()); });
-        const sortedValues = Array.from(values).sort();
+        closeFilterMenu();
 
-        const menu = document.createElement('div');
+        var values = [];
+        var seen = {};
+        table._origRows.forEach(function(row) {
+            if (!row.cells[colIndex]) return;
+            var v = row.cells[colIndex].innerText.trim();
+            if (!seen[v]) { seen[v] = true; values.push(v); }
+        });
+        values.sort();
+
+        var menu = document.createElement('div');
         menu.className = 'filter-menu';
+        menu.id = '_activeFilterMenu';
 
-        // Header : Tout cocher / Décocher
-        const header = document.createElement('div');
-        header.style.padding = '8px 15px';
+        var header = document.createElement('div');
+        header.style.padding = '8px 12px';
         header.style.background = '#f9f9f9';
-        header.innerHTML = '<button class="filter-btn" id="btn-all">Tout cocher</button>' +
-                           '<button class="filter-btn" id="btn-none" style="margin-left:5px;">Tout d&eacute;cocher</button>';
+        header.style.cursor = 'default';
+        var btnAll = document.createElement('button');
+        btnAll.className = 'filter-btn';
+        btnAll.textContent = 'Tout';
+        var btnNone = document.createElement('button');
+        btnNone.className = 'filter-btn';
+        btnNone.textContent = 'Aucun';
+        btnNone.style.marginLeft = '5px';
+        header.appendChild(btnAll);
+        header.appendChild(btnNone);
         menu.appendChild(header);
-        menu.appendChild(document.createElement('hr'));
 
-        // Liste des valeurs avec Checkboxes
-        const listContainer = document.createElement('div');
-        listContainer.style.maxHeight = '180px';
-        listContainer.style.overflowY = 'auto';
-        
-        const currentFilters = table.activeFilters[colIndex] || [];
+        var hr = document.createElement('hr');
+        menu.appendChild(hr);
 
-        sortedValues.forEach(val => {
-            const item = document.createElement('div');
-            const cb = document.createElement('input');
+        var list = document.createElement('div');
+        list.style.maxHeight = '200px';
+        list.style.overflowY = 'auto';
+
+        var currentF = table._filters[colIndex] || null;
+
+        values.forEach(function(val) {
+            var item = document.createElement('div');
+            var cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.value = val;
-            cb.checked = currentFilters.length === 0 || currentFilters.includes(val);
-            
-            const lbl = document.createElement('label');
-            lbl.innerText = val || '(Vide)';
-            lbl.onclick = (e) => { e.preventDefault(); cb.checked = !cb.checked; };
-            
+            cb.checked = !currentF || currentF.indexOf(val) !== -1;
+            var lbl = document.createElement('label');
+            lbl.textContent = val || '(Vide)';
+            lbl.addEventListener('click', function(e) { e.preventDefault(); cb.checked = !cb.checked; });
             item.appendChild(cb);
             item.appendChild(lbl);
-            listContainer.appendChild(item);
+            list.appendChild(item);
         });
-        menu.appendChild(listContainer);
+        menu.appendChild(list);
 
-        // Footer : Appliquer
-        const footer = document.createElement('div');
+        var footer = document.createElement('div');
         footer.className = 'filter-footer';
-        const applyBtn = document.createElement('button');
+        var applyBtn = document.createElement('button');
         applyBtn.className = 'filter-btn filter-btn-primary';
-        applyBtn.innerText = 'Appliquer';
-        applyBtn.onclick = () => {
-            const selected = Array.from(listContainer.querySelectorAll('input:checked')).map(c => c.value);
-            const finalSelection = (selected.length === sortedValues.length) ? null : selected;
-            applyFilter(table, colIndex, finalSelection, menu, icon);
-        };
+        applyBtn.textContent = 'Appliquer';
         footer.appendChild(applyBtn);
         menu.appendChild(footer);
 
-        header.querySelector('#btn-all').onclick = () => listContainer.querySelectorAll('input').forEach(c => c.checked = true);
-        header.querySelector('#btn-none').onclick = () => listContainer.querySelectorAll('input').forEach(c => c.checked = false);
+        btnAll.addEventListener('click', function() { list.querySelectorAll('input').forEach(function(c) { c.checked = true; }); });
+        btnNone.addEventListener('click', function() { list.querySelectorAll('input').forEach(function(c) { c.checked = false; }); });
+        applyBtn.addEventListener('click', function() {
+            var sel = [];
+            list.querySelectorAll('input:checked').forEach(function(c) { sel.push(c.value); });
+            if (sel.length === 0 || sel.length === values.length) {
+                delete table._filters[colIndex];
+                icon.classList.remove('filter-active');
+            } else {
+                table._filters[colIndex] = sel;
+                icon.classList.add('filter-active');
+            }
+            applyFilters(table);
+            closeFilterMenu();
+        });
 
         document.body.appendChild(menu);
-        const rect = th.getBoundingClientRect();
-        menu.style.top = (rect.bottom + window.scrollY) + 'px';
-        menu.style.left = (rect.left + window.scrollX) + 'px';
-        
-        setTimeout(() => { 
-            document.onclick = function(e) { 
-                if (!menu.contains(e.target) && !icon.contains(e.target)) { menu.remove(); document.onclick = null; } 
-            }; 
-        }, 0);
+        var rect = th.getBoundingClientRect();
+        menu.style.top = (rect.bottom + 2) + 'px';
+        menu.style.left = Math.min(rect.left, window.innerWidth - menu.offsetWidth - 10) + 'px';
+
+        setTimeout(function() {
+            document._filterClose = function(e) {
+                var m = document.getElementById('_activeFilterMenu');
+                if (m && !m.contains(e.target) && !icon.contains(e.target)) closeFilterMenu();
+            };
+            document.addEventListener('click', document._filterClose);
+        }, 10);
     }
 
-    function applyFilter(table, colIndex, values, menu, icon) {
-        if (values === null || values.length === 0) { 
-            delete table.activeFilters[colIndex]; 
-            icon.classList.remove('filter-active'); 
-        } else { 
-            table.activeFilters[colIndex] = values; 
-            icon.classList.add('filter-active'); 
-        }
-        
-        const tbody = table.querySelector('tbody');
-        tbody.innerHTML = '';
-        table.originalRows.forEach(row => {
-            let show = true;
-            for (const [cIdx, filterArray] of Object.entries(table.activeFilters)) {
-                if (!filterArray.includes(row.cells[cIdx].innerText.trim())) { show = false; break; }
+    function closeFilterMenu() {
+        var m = document.getElementById('_activeFilterMenu');
+        if (m) m.remove();
+        if (document._filterClose) { document.removeEventListener('click', document._filterClose); document._filterClose = null; }
+    }
+
+    function applyFilters(table) {
+        var tbody = table.tBodies[0];
+        while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+        table._origRows.forEach(function(row) {
+            var show = true;
+            for (var cIdx in table._filters) {
+                if (!table._filters.hasOwnProperty(cIdx)) continue;
+                var cellText = row.cells[cIdx] ? row.cells[cIdx].innerText.trim() : '';
+                if (table._filters[cIdx].indexOf(cellText) === -1) { show = false; break; }
             }
             if (show) tbody.appendChild(row);
         });
-        menu.remove();
     }
-    
-    window.onload = function() { initFilters('dbt'); };
+
+    window.onload = function() {
+        document.querySelectorAll('table[id]').forEach(function(t) { initFilters(t.id); });
+    };
 </script>
 </head>
 <body>
@@ -368,9 +439,9 @@ $Output = @"
 foreach ($Site in $EnvData.Sites.GetEnumerator()) {
     $tid = "t_" + $Site.Key.Replace(" ", "")
     $Output += "<h3>Site: $($Site.Key)</h3><table id='$tid'><thead><tr>
-    <th onclick='sortTable(""$tid"",0,0)'>Serveur</th><th onclick='sortTable(""$tid"",1,0)'>Version</th><th onclick='sortTable(""$tid"",2,0)'>Build</th>
-    <th onclick='sortTable(""$tid"",3,0)'>R&ocirc;les</th><th onclick='sortTable(""$tid"",4,1)'>Bo&icirc;tes</th><th onclick='sortTable(""$tid"",5,0)'>Certificat</th>
-    <th onclick='sortTable(""$tid"",6,0)'>OS</th></tr></thead><tbody>"
+    <th>Serveur</th><th>Version</th><th>Build</th>
+    <th>R&ocirc;les</th><th>Bo&icirc;tes</th><th>Certificat</th>
+    <th>OS</th></tr></thead><tbody>"
     foreach ($S in $Site.Value) {
         $CertHTML = "<div class='cert-container'>"
         foreach ($c in $S.CertStatus.Details) {
@@ -386,17 +457,17 @@ foreach ($Site in $EnvData.Sites.GetEnumerator()) {
             $CertHTML += "</div>"
         }
         $CertHTML += "</div>"
-        $Output += "<tr><td><b>$($S.Name)</b></td><td>$($S.DisplayVer)</td><td style='font-size:8pt;'>$($S.Build)</td><td>$($S.Roles -join ", ")</td>
+        $Output += "<tr><td><b>$($S.Name)</b></td><td>$($S.DisplayVer)</td><td style='font-size:8pt;'>$($S.Build)</td><td>$($S.Roles -join "<br>")</td>
         <td>$($S.Mailboxes)</td><td>$CertHTML</td><td style='font-size:8pt;'>$($S.OSVersion)</td></tr>"
     }
     $Output += "</tbody></table>"
 }
 
 $Output += "<h3>&Eacute;tat des Bases de Donn&eacute;es</h3><table id='dbt'><thead><tr>
-<th onclick='sortTable(""dbt"",0,0)'>Serveur</th><th onclick='sortTable(""dbt"",1,0)'>Base</th><th onclick='sortTable(""dbt"",2,1)'>Bo&icirc;tes</th>
-<th onclick='sortTable(""dbt"",3,1)'>Taille Moy.</th><th onclick='sortTable(""dbt"",4,1)'>Archives</th><th onclick='sortTable(""dbt"",5,1)'>Taille Moy. Arc.</th>
-<th onclick='sortTable(""dbt"",6,1)'>Taille DB</th><th onclick='sortTable(""dbt"",7,1)'>Espace Blanc</th>
-<th onclick='sortTable(""dbt"",8,1)'>DB Libre</th><th onclick='sortTable(""dbt"",9,1)'>Log Libre</th><th onclick='sortTable(""dbt"",10,0)'>Dernier Backup</th></tr></thead><tbody>"
+<th>Serveur</th><th>Base</th><th>Bo&icirc;tes</th>
+<th>Taille Moy.</th><th>Archives</th><th>Taille Moy. Arc.</th>
+<th>Taille DB</th><th>Espace Blanc</th>
+<th>DB Libre</th><th>Log Libre</th><th>Dernier Backup</th></tr></thead><tbody>"
 foreach ($D in $EnvData.DBs) {
     $pctDB = $D.FreeDatabaseDiskSpace; $colDB = if ($pctDB -lt 10) { "#d32f2f" }elseif ($pctDB -lt 20) { "#ff9800" }else { "#2e7d32" }
     $pctLog = $D.FreeLogDiskSpace; $colLog = if ($pctLog -lt 10) { "#d32f2f" }elseif ($pctLog -lt 20) { "#ff9800" }else { "#2e7d32" }
