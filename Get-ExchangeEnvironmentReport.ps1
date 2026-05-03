@@ -156,6 +156,26 @@ $Output = @"
     .progress-bar { height: 100%; border-radius: 6px; }
     .progress-text { font-weight: bold; font-size: 11px; min-width: 35px; text-align: right; }
     .footer { text-align: center; font-size: 12px; color: #999; margin-top: 40px; }
+    
+    /* Styles du Filtre */
+    .filter-icon { cursor: pointer; color: #888; margin-right: 8px; font-size: 11px; transition: color 0.2s; vertical-align: middle; }
+    .filter-icon:hover { color: #F27A00; }
+    .filter-active { color: #F27A00 !important; font-weight: bold; }
+    .filter-menu {
+        position: absolute; background: white; color: #333; border: 1px solid #ccc; border-radius: 4px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15); padding: 5px 0; z-index: 1000;
+        max-height: 250px; overflow-y: auto; font-size: 13px; font-weight: normal; text-transform: none; min-width: 150px;
+    }
+    .filter-menu div { padding: 8px 15px; cursor: pointer; transition: background 0.2s; text-align: left; display: flex; align-items: center; }
+    .filter-menu div:hover { background: #f0f7ff; }
+    .filter-menu label { cursor: pointer; flex: 1; margin-left: 8px; }
+    .filter-menu input[type="checkbox"] { cursor: pointer; width: 14px; height: 14px; }
+    .filter-menu hr { margin: 5px 0; border: 0; border-top: 1px solid #eee; }
+    .filter-footer { padding: 10px; text-align: right; background: #fafafa; border-top: 1px solid #eee; }
+    .filter-btn { padding: 4px 12px; cursor: pointer; border-radius: 3px; border: 1px solid #ccc; background: white; font-size: 11px; transition: all 0.2s; }
+    .filter-btn-primary { background: #F27A00; color: white; border-color: #d66c00; font-weight: bold; }
+    .filter-btn:hover { background: #f0f0f0; }
+    .filter-btn-primary:hover { background: #d66c00; }
 </style>
 <script>
     function sortTable(tid, n, num) {
@@ -168,6 +188,119 @@ $Output = @"
         r.forEach(row => t.tBodies[0].appendChild(row));
         t.dataset.dir = dir === 1 ? 'asc' : 'desc';
     }
+
+    function initFilters(tableId) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        const headers = table.querySelectorAll('th');
+        const tbody = table.querySelector('tbody');
+        table.originalRows = Array.from(tbody.querySelectorAll('tr'));
+        table.activeFilters = {};
+
+        headers.forEach((th, index) => {
+            const icon = document.createElement('span');
+            icon.className = 'filter-icon';
+            icon.innerHTML = '\u25BC';
+            icon.onclick = function(e) { e.stopPropagation(); showFilterMenu(table, th, index, icon); };
+            th.insertBefore(icon, th.firstChild);
+        });
+    }
+
+    function showFilterMenu(table, th, colIndex, icon) {
+        let existing = document.querySelector('.filter-menu');
+        if (existing) existing.remove();
+        
+        const values = new Set();
+        table.originalRows.forEach(row => { if(row.cells[colIndex]) values.add(row.cells[colIndex].innerText.trim()); });
+        const sortedValues = Array.from(values).sort();
+
+        const menu = document.createElement('div');
+        menu.className = 'filter-menu';
+
+        // Header : Tout cocher / Décocher
+        const header = document.createElement('div');
+        header.style.padding = '8px 15px';
+        header.style.background = '#f9f9f9';
+        header.innerHTML = '<button class="filter-btn" id="btn-all">Tout cocher</button>' +
+                           '<button class="filter-btn" id="btn-none" style="margin-left:5px;">Tout d&eacute;cocher</button>';
+        menu.appendChild(header);
+        menu.appendChild(document.createElement('hr'));
+
+        // Liste des valeurs avec Checkboxes
+        const listContainer = document.createElement('div');
+        listContainer.style.maxHeight = '180px';
+        listContainer.style.overflowY = 'auto';
+        
+        const currentFilters = table.activeFilters[colIndex] || [];
+
+        sortedValues.forEach(val => {
+            const item = document.createElement('div');
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = val;
+            cb.checked = currentFilters.length === 0 || currentFilters.includes(val);
+            
+            const lbl = document.createElement('label');
+            lbl.innerText = val || '(Vide)';
+            lbl.onclick = (e) => { e.preventDefault(); cb.checked = !cb.checked; };
+            
+            item.appendChild(cb);
+            item.appendChild(lbl);
+            listContainer.appendChild(item);
+        });
+        menu.appendChild(listContainer);
+
+        // Footer : Appliquer
+        const footer = document.createElement('div');
+        footer.className = 'filter-footer';
+        const applyBtn = document.createElement('button');
+        applyBtn.className = 'filter-btn filter-btn-primary';
+        applyBtn.innerText = 'Appliquer';
+        applyBtn.onclick = () => {
+            const selected = Array.from(listContainer.querySelectorAll('input:checked')).map(c => c.value);
+            const finalSelection = (selected.length === sortedValues.length) ? null : selected;
+            applyFilter(table, colIndex, finalSelection, menu, icon);
+        };
+        footer.appendChild(applyBtn);
+        menu.appendChild(footer);
+
+        header.querySelector('#btn-all').onclick = () => listContainer.querySelectorAll('input').forEach(c => c.checked = true);
+        header.querySelector('#btn-none').onclick = () => listContainer.querySelectorAll('input').forEach(c => c.checked = false);
+
+        document.body.appendChild(menu);
+        const rect = th.getBoundingClientRect();
+        menu.style.top = (rect.bottom + window.scrollY) + 'px';
+        menu.style.left = (rect.left + window.scrollX) + 'px';
+        
+        setTimeout(() => { 
+            document.onclick = function(e) { 
+                if (!menu.contains(e.target) && !icon.contains(e.target)) { menu.remove(); document.onclick = null; } 
+            }; 
+        }, 0);
+    }
+
+    function applyFilter(table, colIndex, values, menu, icon) {
+        if (values === null || values.length === 0) { 
+            delete table.activeFilters[colIndex]; 
+            icon.classList.remove('filter-active'); 
+        } else { 
+            table.activeFilters[colIndex] = values; 
+            icon.classList.add('filter-active'); 
+        }
+        
+        const tbody = table.querySelector('tbody');
+        tbody.innerHTML = '';
+        table.originalRows.forEach(row => {
+            let show = true;
+            for (const [cIdx, filterArray] of Object.entries(table.activeFilters)) {
+                if (!filterArray.includes(row.cells[cIdx].innerText.trim())) { show = false; break; }
+            }
+            if (show) tbody.appendChild(row);
+        });
+        menu.remove();
+    }
+    
+    window.onload = function() { initFilters('dbt'); };
 </script>
 </head>
 <body>
