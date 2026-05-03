@@ -151,7 +151,7 @@ foreach ($D in $Databases) { $EnvData.DBs += _GetDB -Database $D -ExSvrData $Env
 
 # --- CALCULS KPI V1.9.1 ---
 $TotalMB = 0; $TotalArc = 0; $TotalSize = 0; $SvrOK = 0; $SvrTotal = $EnvData.Servers.Count
-foreach ($S in $EnvData.Servers.Values) { if ($S.CertStatus.Status -like "*OK*") { $SvrOK++ } }
+foreach ($S in $EnvData.Servers.Values) { if ($S.OSVersion) { $SvrOK++ } }
 foreach ($D in $EnvData.DBs) { $TotalMB += $D.MailboxCount; $TotalArc += $D.ArchiveMailboxCount; $TotalSize += $D.Size }
 $TotalSizeGB = "{0:N2}" -f ($TotalSize / 1GB)
 
@@ -203,25 +203,26 @@ $Output = @"
     .filter-btn:hover { background: #f0f0f0; }
     .filter-btn-primary:hover { background: #d66c00; }
     
-    /* Styles Certificats Ultra-Compact */
-    .cert-container { text-align: left; min-width: 320px; }
+    /* Styles Certificats Ultra-Compact Corrigé */
+    .cert-container { text-align: left; min-width: 350px; }
     .cert-item { display: flex; align-items: center; white-space: nowrap; margin-bottom: 3px; padding: 2px 0; border-bottom: 1px solid #f9f9f9; }
     .cert-item:last-child { border-bottom: none; }
     .cert-status-dot { width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
-    .cert-name { font-weight: 600; font-size: 11px; color: #1A1A1A; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; max-width: 180px; position: relative; cursor: help; }
-    .cert-pills-wrap { display: flex; gap: 2px; margin-right: 8px; }
-    .cert-pill { padding: 0 4px; border-radius: 3px; font-size: 9px; font-weight: bold; color: white; position: relative; line-height: 14px; height: 14px; }
+    .cert-name-wrap { position: relative; cursor: help; display: flex; align-items: center; }
+    .cert-name { font-weight: 600; font-size: 11px; color: #1A1A1A; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; max-width: 200px; display: inline-block; }
+    .cert-pills-wrap { display: flex; gap: 3px; margin-right: 8px; }
+    .cert-pill { padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; color: white; line-height: 14px; height: 14px; text-transform: uppercase; }
     .pill-iis { background: #0078D4; }
     .pill-smtp { background: #2e7d32; }
     .pill-pop, .pill-imap { background: #666; }
     .pill-auth { background: #F27A00; }
     .cert-expiry-text { font-size: 9px; color: #888; margin-left: auto; padding-left: 10px; }
     
-    .cert-name:hover .cert-tooltip { display: block; }
+    .cert-name-wrap:hover .cert-tooltip { display: block; }
     .cert-tooltip { 
-        display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+        display: none; position: absolute; bottom: 22px; left: 0;
         background: #1A1A1A; color: white; padding: 6px 10px; border-radius: 4px; font-size: 10px;
-        white-space: nowrap; z-index: 2000; box-shadow: 0 3px 8px rgba(0,0,0,0.4); pointer-events: none;
+        white-space: nowrap; z-index: 2000; box-shadow: 0 3px 8px rgba(0,0,0,0.4); pointer-events: none; font-weight: normal;
     }
 </style>
 <script>
@@ -375,10 +376,10 @@ foreach ($Site in $EnvData.Sites.GetEnumerator()) {
         foreach ($c in $S.CertStatus.Details) {
             $CertHTML += "<div class='cert-item'>"
             $CertHTML += "<span class='cert-status-dot' style='background:$($c.StatusColor)'></span>"
-            $CertHTML += "<span class='cert-name'>$($c.Name)<div class='cert-tooltip'>Emetteur : $($c.Issuer)</div></span>"
+            $CertHTML += "<span class='cert-name-wrap'><span class='cert-name'>$($c.Name)</span><div class='cert-tooltip'>Emetteur : $($c.Issuer)</div></span>"
             $CertHTML += "<div class='cert-pills-wrap'>"
             foreach ($pill in $c.Pills) {
-                $CertHTML += "<span class='cert-pill $($pill.Class)' title='$($pill.Name)'>$($pill.Letter)</span>"
+                $CertHTML += "<span class='cert-pill $($pill.Class)'>$($pill.Name)</span>"
             }
             $CertHTML += "</div>"
             $CertHTML += "<span class='cert-expiry-text'>Exp: $($c.Expiry) ($($c.Days) j)</span>"
@@ -409,7 +410,7 @@ foreach ($D in $EnvData.DBs) {
 }
 $Output += "</tbody></table></div><div class='footer'>&copy; 2026 ENSP - Exchange Reporting System</div></body></html>"
 $Output | Out-File $HTMLReport -Encoding utf8
-Log "Rapport V3.0 (ENSP Edition) terminé : $HTMLReport" "Green"
+Log "Rapport V3.0 (ENSP Edition) termine : $HTMLReport" "Green"
 
 # --- CONFIGURATION (IIS Default Document) ---
 try {
@@ -435,10 +436,10 @@ try {
     # Normalisation pour comparaison (suppression retours chariots)
     if ($CurrentConfig.Trim() -ne $WebConfigContent.Trim()) {
         $WebConfigContent | Out-File $WebConfigPath -Encoding utf8
-        Log " - Config IIS mise à jour (Un court arrêt est normal)" "Yellow"
+        Log " - Config IIS mise a jour (Un court arret est normal)" "Yellow"
     }
     else {
-        Log " - Config IIS déjà optimale (Aucun impact)" "Green"
+        Log " - Config IIS deja optimale (Aucun impact)" "Green"
     }
 }
 catch {
