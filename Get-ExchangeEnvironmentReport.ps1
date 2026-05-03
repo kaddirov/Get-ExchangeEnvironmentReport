@@ -20,15 +20,41 @@ function Log($Msg, $Color = "White") { Write-Host "[$($Global:Sw.Elapsed.ToStrin
 function _GetSSLCertStatus {
     param($ServerName)
     try {
-        $Certs = Get-ExchangeCertificate -Server $ServerName -ErrorAction SilentlyContinue | Where-Object { $_.Services -match "IIS|SMTP" }
-        if (!$Certs) { return @{ Status = "Inconnu"; Color = "gray" } }
-        $MinExpiry = $Certs | Sort-Object NotAfter | Select-Object -First 1
-        $DaysLeft = ($MinExpiry.NotAfter - (Get-Date)).Days
-        if ($DaysLeft -lt 0) { return @{ Status = "Expiré !"; Color = "red" } }
-        if ($DaysLeft -lt 30) { return @{ Status = "Expire dans $DaysLeft j"; Color = "orange" } }
-        return @{ Status = "OK ($DaysLeft j)"; Color = "green" }
+        $Certs = Get-ExchangeCertificate -Server $ServerName -ErrorAction SilentlyContinue
+        if (!$Certs) { return @{ Details = @() } }
+        
+        $AuthThumb = (Get-AuthConfig).CurrentCertificateThumbprint
+        $StatusDetails = @()
+
+        foreach ($cert in $Certs) {
+            $pills = @()
+            if ($cert.Services -match "IIS")  { $pills += @{ Letter = "I"; Name = "IIS";  Class = "pill-iis" } }
+            if ($cert.Services -match "SMTP") { $pills += @{ Letter = "S"; Name = "SMTP"; Class = "pill-smtp" } }
+            if ($cert.Services -match "POP")  { $pills += @{ Letter = "P"; Name = "POP";  Class = "pill-pop" } }
+            if ($cert.Services -match "IMAP") { $pills += @{ Letter = "M"; Name = "IMAP"; Class = "pill-imap" } }
+            if ($cert.Thumbprint -eq $AuthThumb) { $pills += @{ Letter = "A"; Name = "AUTH"; Class = "pill-auth" } }
+
+            if ($pills.Count -eq 0) { continue }
+
+            $Days = ($cert.NotAfter - (Get-Date)).Days
+            $StatusColor = "green"
+            if ($Days -lt 0) { $StatusColor = "red" }
+            elseif ($Days -lt 30) { $StatusColor = "orange" }
+            
+            $CN = if ($cert.Subject -match "CN=([^,]+)") { $Matches[1] } else { $cert.Subject }
+            
+            $StatusDetails += @{ 
+                Name = $CN
+                Pills = $pills
+                Days = $Days
+                StatusColor = $StatusColor
+                Expiry = $cert.NotAfter.ToString("dd/MM/yyyy")
+                Issuer = $cert.Issuer.Replace("CN=", "")
+            }
+        }
+        return @{ Details = $StatusDetails | Sort-Object Days }
     }
-    catch { return @{ Status = "Erreur"; Color = "red" } }
+    catch { return @{ Details = @() } }
 }
 
 function _GetDB {
@@ -98,7 +124,7 @@ function _GetExSvr {
     $MBTotal = 0; $Databases | Where-Object { $_.Server -eq $Svr.Name } | ForEach-Object { $MBTotal += $(if ($MailboxesByDB.ContainsKey($_.Identity.ToString())) { $MailboxesByDB[$_.Identity.ToString()].Count }else { 0 }) }
 
     Write-Host " [OK]" -ForegroundColor Green
-    @{Name = $Svr.Name.ToUpper(); DisplayVer = $(if ($Svr.AdminDisplayVersion.Major -eq 15 -and $Svr.AdminDisplayVersion.Minor -eq 1) { "2016" }elseif ($Svr.AdminDisplayVersion.Minor -ge 2) { "2019 / SE" }else { "$($Svr.AdminDisplayVersion.Major).$($Svr.AdminDisplayVersion.Minor)" });
+    @{Name = $Svr.Name.ToUpper(); DisplayVer = $(if ($Svr.AdminDisplayVersion.Major -eq 15 -and $Svr.AdminDisplayVersion.Minor -eq 1) { "2016" }elseif ($Svr.AdminDisplayVersion.Minor -ge 2) { if ($Svr.AdminDisplayVersion.Build -ge 2500) { "SE" } else { "2019" } } else { "$($Svr.AdminDisplayVersion.Major).$($Svr.AdminDisplayVersion.Minor)" });
         Build = $(if ($ExSetupVer) { $ExSetupVer } else { $Svr.AdminDisplayVersion.ToString() }); Roles = $Roles; Mailboxes = $MBTotal; OSVersion = ($OS); Disks = $Disks;
         CertStatus = _GetSSLCertStatus -ServerName $Svr.Name; MBStatsByDB = $MBStatsByDB; ArcStatsByDB = $ArcStatsByDB; Site = $Svr.Site.Name 
     }
@@ -108,7 +134,7 @@ function _GetExSvr {
 $ExBin = "C:\Program Files\Microsoft\Exchange Server\V15\bin\RemoteExchange.ps1"
 if (!(Get-Command Get-ExchangeServer -ErrorAction SilentlyContinue)) { if (Test-Path $ExBin) { . $ExBin; Connect-ExchangeServer -auto } else { throw "Lancer depuis EMS" } }
 
-Log "Collecte Globale (Requête unique optimisée V2.8)..." "Cyan"
+Log "Collecte Globale (Requete unique optimisee V3.0)..." "Cyan"
 $AllMbx = Get-Mailbox -ResultSize Unlimited | Select-Object Database, ArchiveDatabase, Identity
 $MailboxesByDB = $AllMbx | Group-Object Database -AsHashTable -AsString
 $ArchivesByDB = $AllMbx | Where-Object { $_.ArchiveDatabase } | Group-Object ArchiveDatabase -AsHashTable -AsString
@@ -176,6 +202,27 @@ $Output = @"
     .filter-btn-primary { background: #F27A00; color: white; border-color: #d66c00; font-weight: bold; }
     .filter-btn:hover { background: #f0f0f0; }
     .filter-btn-primary:hover { background: #d66c00; }
+    
+    /* Styles Certificats Ultra-Compact */
+    .cert-container { text-align: left; min-width: 320px; }
+    .cert-item { display: flex; align-items: center; white-space: nowrap; margin-bottom: 3px; padding: 2px 0; border-bottom: 1px solid #f9f9f9; }
+    .cert-item:last-child { border-bottom: none; }
+    .cert-status-dot { width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
+    .cert-name { font-weight: 600; font-size: 11px; color: #1A1A1A; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; max-width: 180px; position: relative; cursor: help; }
+    .cert-pills-wrap { display: flex; gap: 2px; margin-right: 8px; }
+    .cert-pill { padding: 0 4px; border-radius: 3px; font-size: 9px; font-weight: bold; color: white; position: relative; line-height: 14px; height: 14px; }
+    .pill-iis { background: #0078D4; }
+    .pill-smtp { background: #2e7d32; }
+    .pill-pop, .pill-imap { background: #666; }
+    .pill-auth { background: #F27A00; }
+    .cert-expiry-text { font-size: 9px; color: #888; margin-left: auto; padding-left: 10px; }
+    
+    .cert-name:hover .cert-tooltip { display: block; }
+    .cert-tooltip { 
+        display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+        background: #1A1A1A; color: white; padding: 6px 10px; border-radius: 4px; font-size: 10px;
+        white-space: nowrap; z-index: 2000; box-shadow: 0 3px 8px rgba(0,0,0,0.4); pointer-events: none;
+    }
 </style>
 <script>
     function sortTable(tid, n, num) {
@@ -324,8 +371,22 @@ foreach ($Site in $EnvData.Sites.GetEnumerator()) {
     <th onclick='sortTable(""$tid"",3,0)'>R&ocirc;les</th><th onclick='sortTable(""$tid"",4,1)'>Bo&icirc;tes</th><th onclick='sortTable(""$tid"",5,0)'>Certificat</th>
     <th onclick='sortTable(""$tid"",6,0)'>OS</th></tr></thead><tbody>"
     foreach ($S in $Site.Value) {
+        $CertHTML = "<div class='cert-container'>"
+        foreach ($c in $S.CertStatus.Details) {
+            $CertHTML += "<div class='cert-item'>"
+            $CertHTML += "<span class='cert-status-dot' style='background:$($c.StatusColor)'></span>"
+            $CertHTML += "<span class='cert-name'>$($c.Name)<div class='cert-tooltip'>Emetteur : $($c.Issuer)</div></span>"
+            $CertHTML += "<div class='cert-pills-wrap'>"
+            foreach ($pill in $c.Pills) {
+                $CertHTML += "<span class='cert-pill $($pill.Class)' title='$($pill.Name)'>$($pill.Letter)</span>"
+            }
+            $CertHTML += "</div>"
+            $CertHTML += "<span class='cert-expiry-text'>Exp: $($c.Expiry) ($($c.Days) j)</span>"
+            $CertHTML += "</div>"
+        }
+        $CertHTML += "</div>"
         $Output += "<tr><td><b>$($S.Name)</b></td><td>$($S.DisplayVer)</td><td style='font-size:8pt;'>$($S.Build)</td><td>$($S.Roles -join ", ")</td>
-        <td>$($S.Mailboxes)</td><td style='color:$($S.CertStatus.Color);font-weight:bold;'>$($S.CertStatus.Status)</td><td style='font-size:8pt;'>$($S.OSVersion)</td></tr>"
+        <td>$($S.Mailboxes)</td><td>$CertHTML</td><td style='font-size:8pt;'>$($S.OSVersion)</td></tr>"
     }
     $Output += "</tbody></table>"
 }
