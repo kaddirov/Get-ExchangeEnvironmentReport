@@ -1,4 +1,4 @@
-# 📧 Exchange Environment Report 3.0
+# 📧 Exchange Environment Report 3.1
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1-blue.svg) ![Exchange](https://img.shields.io/badge/Exchange-2016%20%7C%202019%20%7C%20SE-orange.svg)
 
@@ -6,7 +6,7 @@
 A high-performance PowerShell script to generate **modern HTML dashboards** for your Microsoft Exchange Server infrastructure.
 
 ## ⭐ Credits & Acknowledgements
-This project is a modernized **3.0** evolution by **B.O** based on the original work by **Steve Goodman** and **Thomas Stensitzki**.
+This project is a modernized **3.1** evolution by **B.O** based on the original work by **Steve Goodman** and **Thomas Stensitzki**.
 *   Original Script: [Get-ExchangeEnvironmentReport](https://github.com/Apoc70/Get-ExchangeEnvironmentReport/blob/master/Get-ExchangeEnvironmentReport.ps1)
 
 ---
@@ -16,7 +16,10 @@ This project is a modernized **3.0** evolution by **B.O** based on the original 
 *   **📊 KPI Dashboard:** Immediate overview (Active/Archive Mailboxes, Database Whitespace, Server Health).
 *   **🎨 100% Customizable:** Adapt the report's logo, title, and colors to your corporate branding via simple parameters.
 *   **🔋 Visual Gauges:** Instant monitoring of disk space (Database & Logs) with color codes.
-*   **🛡️ Secure by Design:** No complex JavaScript or external calls. Easily hostable on IIS.
+*   **🛡️ Secure by Design:** No complex external calls. Easily hostable on IIS.
+*   **🔍 Live Filtering:** Interactive sorting and filtering directly in your browser.
+*   **📧 Email Support:** Automated delivery of HTML reports to your mailbox.
+*   **📜 Certificate Badges:** Visual breakdown of IIS, SMTP, POP, IMAP, and AUTH certificates.
 
 ## 📋 Prerequisites
 *   **OS:** Windows Server 2012 R2 or higher.
@@ -72,5 +75,15 @@ This script is a "Community Standard". Feel free to open Pull Requests to add DA
 
 
 ---
+
+## 📝 Changelog
+
+### [V3.1] - 2026-05-04
+*   **Added**: Restored **Email Delivery** functionality (`Send-MailMessage`).
+*   **Added**: **Client-side filtering** and sorting in the HTML report.
+*   **Added**: **Advanced Certificate Analysis** with service badges (IIS, SMTP, etc.).
+*   **Added**: Visible versioning in console and HTML footer/header.
+*   **Added**: New **Standard Edition** in a separate folder for generic usage.
+
 **License:** MIT
 **Author:** B.O
