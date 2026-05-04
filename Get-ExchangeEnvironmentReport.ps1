@@ -1,7 +1,7 @@
 <#
     .SYNOPSIS
-    Exchange Environment Report - V3.1 (Standard Edition)
-    Modernized for Exchange 2016+ (SE Support)
+    Exchange Environment Report - V3.1
+    Modernized for Exchange 2016+
     Performance: Utilizing lookup tables and bulk collections.
 #>
 param(
@@ -399,7 +399,7 @@ foreach ($D in $EnvData.DBs) {
 }
 $Output += "</tbody></table></div><div class='footer'>&copy; $(Get-Date -Format 'yyyy') $CompanyLogo - $ReportTitle | Version 3.1</div></body></html>"
 $Output | Out-File $HTMLReport -Encoding utf8
-Log "Report V3.1 (Standard Edition) finished: $HTMLReport" "Green"
+Log "Report V3.1 finished: $HTMLReport" "Green"
 
 # --- MAIL DELIVERY ---
 if ($SendMail) {
