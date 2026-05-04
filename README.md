@@ -81,9 +81,9 @@ This script is a "Community Standard". Feel free to open Pull Requests to add DA
 ### [V3.1] - 2026-05-04
 *   **Added**: Restored **Email Delivery** functionality (`Send-MailMessage`).
 *   **Added**: **Client-side filtering** and sorting in the HTML report.
-*   **Added**: **Advanced Certificate Analysis** with service badges (IIS, SMTP, etc.).
+*   **Added**: **Advanced Certificate Analysis** with service badges (IIS, SMTP, POP, IMAP, AUTH).
 *   **Added**: Visible versioning in console and HTML footer/header.
-*   **Added**: New **Standard Edition** in a separate folder for generic usage.
+*   **Improved**: Optimized data collection logic using lookup tables.
 
 **License:** MIT
 **Author:** B.O
