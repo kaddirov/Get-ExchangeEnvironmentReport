@@ -67,23 +67,27 @@ function _GetDB {
     $DbIdentity = $Database.Identity.ToString()
     
     # Mailbox Counts from Lookup Tables
-    $MBCount = $(if ($MailboxesByDB.ContainsKey($DbIdentity)) { $MailboxesByDB[$DbIdentity].Count } else { 0 })
-    $ArcCount = $(if ($ArchivesByDB.ContainsKey($DbName)) { $ArchivesByDB[$DbName].Count } else { 0 })
+    $MBCount = 0
+    if ($MailboxesByDB -and $MailboxesByDB.ContainsKey($DbIdentity)) { $MBCount = $MailboxesByDB[$DbIdentity].Count }
+    $ArcCount = 0
+    if ($ArchivesByDB -and $ArchivesByDB.ContainsKey($DbName)) { $ArcCount = $ArchivesByDB[$DbName].Count }
     
     # Average Sizes
     $AvgMBSize = 0; $AvgArcSize = 0
-    if ($ExSvrData.MBStatsByDB.ContainsKey($DbIdentity)) {
+    if ($ExSvrData -and $ExSvrData.MBStatsByDB -and $ExSvrData.MBStatsByDB.ContainsKey($DbIdentity)) {
         $stats = $ExSvrData.MBStatsByDB[$DbIdentity]
-        $total = 0; $stats | ForEach-Object { $total += $_.Size }; $AvgMBSize = $total / $stats.Count
+        $total = 0; $stats | ForEach-Object { $total += $_.Size }
+        if ($stats.Count -gt 0) { $AvgMBSize = $total / $stats.Count }
     }
-    if ($ExSvrData.ArcStatsByDB.ContainsKey($DbIdentity)) {
+    if ($ExSvrData -and $ExSvrData.ArcStatsByDB -and $ExSvrData.ArcStatsByDB.ContainsKey($DbIdentity)) {
         $stats = $ExSvrData.ArcStatsByDB[$DbIdentity]
-        $total = 0; $stats | ForEach-Object { $total += $_.Size }; $AvgArcSize = $total / $stats.Count
+        $total = 0; $stats | ForEach-Object { $total += $_.Size }
+        if ($stats.Count -gt 0) { $AvgArcSize = $total / $stats.Count }
     }
 
     # Disk Space (CIM)
     $FreeDBDisk = $null; $FreeLogDisk = $null
-    if ($ExSvrData.Disks) {
+    if ($ExSvrData -and $ExSvrData.Disks) {
         foreach ($Disk in $ExSvrData.Disks) {
             if ($Database.EdbFilePath.PathName -like "$($Disk.Name)*") { $FreeDBDisk = $Disk.FreeSpace / $Disk.Capacity * 100 }
             if ($Database.LogFolderPath.PathName -like "$($Disk.Name)*") { $FreeLogDisk = $Disk.FreeSpace / $Disk.Capacity * 100 }
@@ -140,8 +144,16 @@ if (!(Get-Command Get-ExchangeServer -ErrorAction SilentlyContinue)) { if (Test-
 Log "Starting Exchange Environment Report V3.1..." "Green"
 Log "Global Collection (Optimized V3.1)..." "Cyan"
 $AllMbx = Get-Mailbox -ResultSize Unlimited | Select-Object Database, ArchiveDatabase, Identity
-$MailboxesByDB = $AllMbx | Group-Object Database -AsHashTable -AsString
-$ArchivesByDB = $AllMbx | Where-Object { $_.ArchiveDatabase } | Group-Object ArchiveDatabase -AsHashTable -AsString
+$MailboxesByDB = @{}
+if ($AllMbx) {
+    $MailboxesByDB = $AllMbx | Group-Object Database -AsHashTable -AsString
+    if ($null -eq $MailboxesByDB) { $MailboxesByDB = @{} }
+}
+$ArchivesByDB = @{}
+if ($AllMbx) {
+    $ArchivesByDB = $AllMbx | Where-Object { $_.ArchiveDatabase } | Group-Object ArchiveDatabase -AsHashTable -AsString
+    if ($null -eq $ArchivesByDB) { $ArchivesByDB = @{} }
+}
 $ExchangeServers = Get-ExchangeServer $ServerFilter
 $Databases = Get-MailboxDatabase -Status | Where-Object { $_.Server -like $ServerFilter }
 
