@@ -125,8 +125,18 @@ function _GetExSvr {
             }
             $DbStr = $_.Database.ToString()
             
-            # Double check to prevent archive mailboxes from appearing in the primary list
-            if (!$_.IsArchiveMailbox) {
+            if ($_.IsArchiveMailbox) {
+                if (!$ArcStatsByDB[$DbStr]) { $ArcStatsByDB[$DbStr] = New-Object System.Collections.Generic.List[PSObject] }
+                $ArcStatsByDB[$DbStr].Add(@{Size = $SizeBytes })
+                
+                $ArchiveList.Add([PSCustomObject]@{
+                    DisplayName = $_.DisplayName
+                    Size = $SizeBytes
+                    LimitStatus = $LimitStatus
+                    Database = $DbStr
+                    Server = $Svr.Name.ToUpper()
+                })
+            } else {
                 if (!$MBStatsByDB[$DbStr]) { $MBStatsByDB[$DbStr] = New-Object System.Collections.Generic.List[PSObject] }
                 $MBStatsByDB[$DbStr].Add(@{Size = $SizeBytes })
                 
@@ -138,27 +148,6 @@ function _GetExSvr {
                     Server = $Svr.Name.ToUpper()
                 })
             }
-        }
-        Get-MailboxStatistics -Server $Svr.Name -Archive -ErrorAction SilentlyContinue | ForEach-Object {
-            $SizeBytes = 0
-            if ($_.TotalItemSize -and $_.TotalItemSize.Value) {
-                $SizeBytes = $_.TotalItemSize.Value.ToBytes()
-            }
-            $LimitStatus = ""
-            if ($_.StorageLimitStatus) {
-                $LimitStatus = $_.StorageLimitStatus.ToString()
-            }
-            $DbStr = $_.Database.ToString()
-            if (!$ArcStatsByDB[$DbStr]) { $ArcStatsByDB[$DbStr] = New-Object System.Collections.Generic.List[PSObject] }
-            $ArcStatsByDB[$DbStr].Add(@{Size = $SizeBytes })
-            
-            $ArchiveList.Add([PSCustomObject]@{
-                DisplayName = $_.DisplayName
-                Size = $SizeBytes
-                LimitStatus = $LimitStatus
-                Database = $DbStr
-                Server = $Svr.Name.ToUpper()
-            })
         }
     }
 
