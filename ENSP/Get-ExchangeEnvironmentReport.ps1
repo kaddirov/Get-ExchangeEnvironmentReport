@@ -115,14 +115,50 @@ function _GetExSvr {
 
     # Bulk Stats Collection
     $MBStatsByDB = @{}; $ArcStatsByDB = @{}
+    $MailboxList = New-Object System.Collections.Generic.List[PSObject]
+    $ArchiveList = New-Object System.Collections.Generic.List[PSObject]
     if (!$SkipMailboxStats) {
         Get-MailboxStatistics -Server $Svr.Name -ErrorAction SilentlyContinue | ForEach-Object {
-            if (!$MBStatsByDB[$_.Database.ToString()]) { $MBStatsByDB[$_.Database.ToString()] = New-Object System.Collections.Generic.List[PSObject] }
-            $MBStatsByDB[$_.Database.ToString()].Add(@{Size = $_.TotalItemSize.Value.ToBytes() })
+            $SizeBytes = 0
+            if ($_.TotalItemSize -and $_.TotalItemSize.Value) {
+                $SizeBytes = $_.TotalItemSize.Value.ToBytes()
+            }
+            $LimitStatus = ""
+            if ($_.StorageLimitStatus) {
+                $LimitStatus = $_.StorageLimitStatus.ToString()
+            }
+            $DbStr = $_.Database.ToString()
+            if (!$MBStatsByDB[$DbStr]) { $MBStatsByDB[$DbStr] = New-Object System.Collections.Generic.List[PSObject] }
+            $MBStatsByDB[$DbStr].Add(@{Size = $SizeBytes })
+            
+            $MailboxList.Add(@{
+                DisplayName = $_.DisplayName
+                Size = $SizeBytes
+                LimitStatus = $LimitStatus
+                Database = $DbStr
+                Server = $Svr.Name.ToUpper()
+            })
         }
         Get-MailboxStatistics -Server $Svr.Name -Archive -ErrorAction SilentlyContinue | ForEach-Object {
-            if (!$ArcStatsByDB[$_.Database.ToString()]) { $ArcStatsByDB[$_.Database.ToString()] = New-Object System.Collections.Generic.List[PSObject] }
-            $ArcStatsByDB[$_.Database.ToString()].Add(@{Size = $_.TotalItemSize.Value.ToBytes() })
+            $SizeBytes = 0
+            if ($_.TotalItemSize -and $_.TotalItemSize.Value) {
+                $SizeBytes = $_.TotalItemSize.Value.ToBytes()
+            }
+            $LimitStatus = ""
+            if ($_.StorageLimitStatus) {
+                $LimitStatus = $_.StorageLimitStatus.ToString()
+            }
+            $DbStr = $_.Database.ToString()
+            if (!$ArcStatsByDB[$DbStr]) { $ArcStatsByDB[$DbStr] = New-Object System.Collections.Generic.List[PSObject] }
+            $ArcStatsByDB[$DbStr].Add(@{Size = $SizeBytes })
+            
+            $ArchiveList.Add(@{
+                DisplayName = $_.DisplayName
+                Size = $SizeBytes
+                LimitStatus = $LimitStatus
+                Database = $DbStr
+                Server = $Svr.Name.ToUpper()
+            })
         }
     }
 
@@ -141,8 +177,31 @@ function _GetExSvr {
     @{Name = $Svr.Name.ToUpper(); DisplayVer = $(if ($Svr.AdminDisplayVersion.Major -eq 15 -and $Svr.AdminDisplayVersion.Minor -eq 1) { "2016" }elseif ($Svr.AdminDisplayVersion.Minor -ge 2) { if ($Svr.AdminDisplayVersion.Build -ge 2500) { "SE" } else { "2019" } } else { "$($Svr.AdminDisplayVersion.Major).$($Svr.AdminDisplayVersion.Minor)" });
         Build = $(if ($ExSetupVer) { $ExSetupVer } else { $Svr.AdminDisplayVersion.ToString() }); Roles = $Roles; Mailboxes = $MBTotal; OSVersion = ($OS); Disks = $Disks;
         CertStatus = _GetSSLCertStatus -ServerName $Svr.Name -AuthThumb $AuthThumb; MBStatsByDB = $MBStatsByDB; ArcStatsByDB = $ArcStatsByDB; Site = $Svr.Site.Name;
-        OSFreePct = $OSFreePct; OSFreeGB = $OSFreeGB; OSDiskName = $SysDrive
+        OSFreePct = $OSFreePct; OSFreeGB = $OSFreeGB; OSDiskName = $SysDrive;
+        MailboxDetails = $MailboxList; ArchiveDetails = $ArchiveList
     }
+}
+
+function _RenderMbxTable {
+    param($Title, $List, $Tid)
+    $tbl = "<h3>$Title</h3>"
+    if (!$List -or $List.Count -eq 0) {
+        $tbl += "<p style='color:#999; font-style:italic; padding: 10px 0;'>Aucune boite trouvee.</p>"
+        return $tbl
+    }
+    $tbl += "<table id='$Tid'><thead><tr><th>Nom d'affichage</th><th>Taille</th><th>Statut de limite</th><th>Base de donnees</th><th>Serveur</th></tr></thead><tbody>"
+    foreach ($m in $List) {
+        $statusCol = if ($m.LimitStatus -match "Prohibit|Exceeded") { "color:#d32f2f; font-weight:bold;" } else { "" }
+        $tbl += "<tr>
+        <td align='left'><b>$($m.DisplayName)</b></td>
+        <td>$('{0:N2}' -f ($m.Size/1GB)) GB</td>
+        <td style='$statusCol'>$($m.LimitStatus)</td>
+        <td>$($m.Database)</td>
+        <td>$($m.Server)</td>
+        </tr>"
+    }
+    $tbl += "</tbody></table>"
+    return $tbl
 }
 
 # --- PROCESS ---
@@ -323,6 +382,14 @@ $Output = @"
     .progress-text { font-weight: bold; font-size: 11px; min-width: 35px; text-align: right; }
     .footer { text-align: center; font-size: 12px; color: #999; margin-top: 40px; }
     
+    /* Tabs Styles */
+    .tabs-nav { display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+    .tab-btn { background: #f5f5f5; border: 1px solid #ddd; padding: 10px 20px; font-size: 14px; font-weight: bold; cursor: pointer; border-radius: 4px; transition: all 0.2s; color: #666; }
+    .tab-btn:hover { background: #e0e0e0; }
+    .tab-btn.active { background: $ThemeColor; color: white; border-color: $ThemeColor; }
+    .tab-content { animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    
     /* Filter Styles */
     .filter-icon { 
         position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
@@ -472,6 +539,20 @@ $Output = @"
         });
     }
 
+    function openTab(evt, tabId) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+        }
+        tablinks = document.getElementsByClassName("tab-btn");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+        document.getElementById(tabId).style.display = "block";
+        evt.currentTarget.className += " active";
+    }
+
     window.onload = function() { document.querySelectorAll('table[id]').forEach(function(t) { initFilters(t.id); }); };
 </script>
 </head>
@@ -481,12 +562,18 @@ $Output = @"
     <p>Infrastructure &bull; $ReportDate &bull; v3.1</p>
 </div>
 <div class="container">
-    <div class="dashboard">
-        <div class="card"><h2>$TotalMB</h2><p>Active Mailboxes</p></div>
-        <div class="card"><h2>$TotalArc</h2><p>Archive Mailboxes</p></div>
-        <div class="card"><h2>$TotalSizeGB <small style="font-size:16px;">GB</small></h2><p>Total Volume</p></div>
-        <div class="card"><h2>$SvrOK / $SvrTotal</h2><p>Servers Online</p></div>
+    <div class="tabs-nav">
+        <button class="tab-btn active" onclick="openTab(event, 'tab-infra')">Infrastructure</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-mailboxes')">Boites aux lettres</button>
     </div>
+    
+    <div id="tab-infra" class="tab-content" style="display:block;">
+        <div class="dashboard">
+            <div class="card"><h2>$TotalMB</h2><p>Active Mailboxes</p></div>
+            <div class="card"><h2>$TotalArc</h2><p>Archive Mailboxes</p></div>
+            <div class="card"><h2>$TotalSizeGB <small style="font-size:16px;">GB</small></h2><p>Total Volume</p></div>
+            <div class="card"><h2>$SvrOK / $SvrTotal</h2><p>Servers Online</p></div>
+        </div>
 "@
 
 foreach ($Site in $EnvData.Sites.GetEnumerator()) {
@@ -541,7 +628,32 @@ foreach ($D in $EnvData.DBs) {
     <td><div class='progress-container'><div class='progress-bg'><div class='progress-bar' style='width:$($pctLog)%;background:$colLog;'></div></div><div class='progress-text'>$('{0:N0}' -f $pctLog)%</div></div></td>
     <td style='font-size:8pt;color:#666;'>$($D.LastFullBackup)</td></tr>"
 }
-$Output += "</tbody></table></div><div class='footer'>&copy; $(Get-Date -Format 'yyyy') $CompanyLogo - $ReportTitle | v3.1</div></body></html>"
+$AllMailboxes = @()
+$AllArchives = @()
+foreach ($S in $EnvData.Servers.Values) {
+    if ($S.MailboxDetails) { $AllMailboxes += $S.MailboxDetails }
+    if ($S.ArchiveDetails) { $AllArchives += $S.ArchiveDetails }
+}
+
+$MailboxTabHTML = ""
+if ($SkipMailboxStats) {
+    $MailboxTabHTML = "<p style='text-align:center; color:#999; padding: 40px; font-style:italic;'>Les statistiques detaillees des boites aux lettres ont ete ignorees (-SkipMailboxStats).</p>"
+} else {
+    $Top10Mbx = $AllMailboxes | Sort-Object Size -Descending | Select-Object -First 10
+    $FullMbx = $AllMailboxes | Where-Object { $_.LimitStatus -match "Prohibit|Exceeded" }
+    $Top10Arc = $AllArchives | Sort-Object Size -Descending | Select-Object -First 10
+    $FullArc = $AllArchives | Where-Object { $_.LimitStatus -match "Prohibit|Exceeded" }
+    
+    $MailboxTabHTML += _RenderMbxTable -Title "Top 10 - Grosses Boites aux Lettres" -List $Top10Mbx -Tid "t_top10mbx"
+    $MailboxTabHTML += _RenderMbxTable -Title "Boites aux Lettres Pleines (Limite depassee)" -List $FullMbx -Tid "t_fullmbx"
+    $MailboxTabHTML += _RenderMbxTable -Title "Top 10 - Grosses Boites d'Archives" -List $Top10Arc -Tid "t_top10arc"
+    $MailboxTabHTML += _RenderMbxTable -Title "Boites d'Archives Pleines (Limite depassee)" -List $FullArc -Tid "t_fullarc"
+}
+
+$Output += "</tbody></table></div>" # Close Database Status table and tab-infra div
+$Output += "<div id='tab-mailboxes' class='tab-content' style='display:none;'>$MailboxTabHTML</div>" # Add tab-mailboxes content and div
+$Output += "</div>" # Close container div
+$Output += "<div class='footer'>&copy; $(Get-Date -Format 'yyyy') $CompanyLogo - $ReportTitle | v3.1</div></body></html>"
 $Output | Out-File $HTMLReport -Encoding utf8
 Log "Report V3.1 finished: $HTMLReport" "Green"
 
