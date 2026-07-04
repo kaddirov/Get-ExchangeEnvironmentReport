@@ -128,16 +128,20 @@ function _GetExSvr {
                 $LimitStatus = $_.StorageLimitStatus.ToString()
             }
             $DbStr = $_.Database.ToString()
-            if (!$MBStatsByDB[$DbStr]) { $MBStatsByDB[$DbStr] = New-Object System.Collections.Generic.List[PSObject] }
-            $MBStatsByDB[$DbStr].Add(@{Size = $SizeBytes })
             
-            $MailboxList.Add(@{
-                DisplayName = $_.DisplayName
-                Size = $SizeBytes
-                LimitStatus = $LimitStatus
-                Database = $DbStr
-                Server = $Svr.Name.ToUpper()
-            })
+            # Double check to prevent archive mailboxes from appearing in the primary list
+            if (!$_.IsArchiveMailbox) {
+                if (!$MBStatsByDB[$DbStr]) { $MBStatsByDB[$DbStr] = New-Object System.Collections.Generic.List[PSObject] }
+                $MBStatsByDB[$DbStr].Add(@{Size = $SizeBytes })
+                
+                $MailboxList.Add([PSCustomObject]@{
+                    DisplayName = $_.DisplayName
+                    Size = $SizeBytes
+                    LimitStatus = $LimitStatus
+                    Database = $DbStr
+                    Server = $Svr.Name.ToUpper()
+                })
+            }
         }
         Get-MailboxStatistics -Server $Svr.Name -Archive -ErrorAction SilentlyContinue | ForEach-Object {
             $SizeBytes = 0
@@ -152,7 +156,7 @@ function _GetExSvr {
             if (!$ArcStatsByDB[$DbStr]) { $ArcStatsByDB[$DbStr] = New-Object System.Collections.Generic.List[PSObject] }
             $ArcStatsByDB[$DbStr].Add(@{Size = $SizeBytes })
             
-            $ArchiveList.Add(@{
+            $ArchiveList.Add([PSCustomObject]@{
                 DisplayName = $_.DisplayName
                 Size = $SizeBytes
                 LimitStatus = $LimitStatus
