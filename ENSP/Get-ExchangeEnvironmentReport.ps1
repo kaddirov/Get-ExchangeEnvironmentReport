@@ -21,12 +21,11 @@ function Log($Msg, $Color = "White") { Write-Host "[$($Global:Sw.Elapsed.ToStrin
 # --- INTERNAL FUNCTIONS ---
 
 function _GetSSLCertStatus {
-    param($ServerName)
+    param($ServerName, $AuthThumb)
     try {
         $Certs = Get-ExchangeCertificate -Server $ServerName -ErrorAction SilentlyContinue
         if (!$Certs) { return @{ Details = @() } }
         
-        $AuthThumb = (Get-AuthConfig).CurrentCertificateThumbprint
         $StatusDetails = @()
 
         foreach ($cert in $Certs) {
@@ -102,7 +101,7 @@ function _GetDB {
 }
 
 function _GetExSvr {
-    param($Svr, $MailboxesByDB)
+    param($Svr, $MailboxesByDB, $Databases, $AuthThumb)
     Log "Collecting $($Svr.Name)..." "Gray"
     
     # ExSetup Version
@@ -140,12 +139,20 @@ function _GetExSvr {
     }
 
     $Roles = [array]($Svr.ServerRole.ToString().Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "Mailbox|Edge" })
-    $MBTotal = 0; $Databases | Where-Object { $_.Server -eq $Svr.Name } | ForEach-Object { $MBTotal += $(if ($MailboxesByDB.ContainsKey($_.Identity.ToString())) { $MailboxesByDB[$_.Identity.ToString()].Count }else { 0 }) }
+    
+    $MBTotal = 0
+    if ($Databases) {
+        $Databases | Where-Object { $_.Server -eq $Svr.Name } | ForEach-Object { 
+            if ($MailboxesByDB -and $MailboxesByDB.ContainsKey($_.Identity.ToString())) { 
+                $MBTotal += $MailboxesByDB[$_.Identity.ToString()].Count 
+            } 
+        }
+    }
 
     Write-Host " [OK]" -ForegroundColor Green
     @{Name = $Svr.Name.ToUpper(); DisplayVer = $(if ($Svr.AdminDisplayVersion.Major -eq 15 -and $Svr.AdminDisplayVersion.Minor -eq 1) { "2016" }elseif ($Svr.AdminDisplayVersion.Minor -ge 2) { if ($Svr.AdminDisplayVersion.Build -ge 2500) { "SE" } else { "2019" } } else { "$($Svr.AdminDisplayVersion.Major).$($Svr.AdminDisplayVersion.Minor)" });
         Build = $(if ($ExSetupVer) { $ExSetupVer } else { $Svr.AdminDisplayVersion.ToString() }); Roles = $Roles; Mailboxes = $MBTotal; OSVersion = ($OS); Disks = $Disks;
-        CertStatus = _GetSSLCertStatus -ServerName $Svr.Name; MBStatsByDB = $MBStatsByDB; ArcStatsByDB = $ArcStatsByDB; Site = $Svr.Site.Name;
+        CertStatus = _GetSSLCertStatus -ServerName $Svr.Name -AuthThumb $AuthThumb; MBStatsByDB = $MBStatsByDB; ArcStatsByDB = $ArcStatsByDB; Site = $Svr.Site.Name;
         OSFreePct = $OSFreePct; OSFreeGB = $OSFreeGB; OSDiskName = $SysDrive
     }
 }
@@ -170,12 +177,168 @@ if ($AllMbx) {
 $ExchangeServers = Get-ExchangeServer $ServerFilter
 $Databases = Get-MailboxDatabase -Status | Where-Object { $_.Server -like $ServerFilter }
 
+$GlobalAuthThumb = $null
+try {
+    $GlobalAuthThumb = (Get-AuthConfig).CurrentCertificateThumbprint
+} catch {
+    # Fallback if Get-AuthConfig fails
+}
+
 $EnvData = @{Sites = @{}; Servers = @{}; DBs = @() }
+
+Log "Parallel Server Data Collection (Runspace Pool)..." "Cyan"
+
+$InitialSessionState = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+$RunspacePool = [runspacefactory]::CreateRunspacePool(1, 10, $InitialSessionState, $Host)
+$RunspacePool.Open()
+
+$Jobs = @()
+
+$CollectionBlock = {
+    param($Svr, $MailboxesByDB, $Databases, $AuthThumb)
+
+    # Thread-local logger
+    function Log($Msg, $Color = "White") { Write-Host $Msg -ForegroundColor $Color }
+
+    # Load Exchange snapin in runspace thread
+    if (!(Get-Command Get-MailboxStatistics -ErrorAction SilentlyContinue)) {
+        Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn -ErrorAction SilentlyContinue
+    }
+
+    # Redefine _GetSSLCertStatus inside thread scope
+    function _GetSSLCertStatus {
+        param($ServerName, $AuthThumb)
+        try {
+            $Certs = Get-ExchangeCertificate -Server $ServerName -ErrorAction SilentlyContinue
+            if (!$Certs) { return @{ Details = @() } }
+            $StatusDetails = @()
+
+            foreach ($cert in $Certs) {
+                $pills = @()
+                if ($cert.Services -match "IIS")  { $pills += @{ Name = "IIS";  Class = "pill-iis" } }
+                if ($cert.Services -match "SMTP") { $pills += @{ Name = "SMTP"; Class = "pill-smtp" } }
+                if ($cert.Services -match "POP")  { $pills += @{ Name = "POP";  Class = "pill-pop" } }
+                if ($cert.Services -match "IMAP") { $pills += @{ Name = "IMAP"; Class = "pill-imap" } }
+                if ($cert.Thumbprint -eq $AuthThumb) { $pills += @{ Name = "AUTH"; Class = "pill-auth" } }
+
+                if ($pills.Count -eq 0) { continue }
+
+                $Days = ($cert.NotAfter - (Get-Date)).Days
+                $StatusColor = "green"
+                if ($Days -lt 0) { $StatusColor = "red" }
+                elseif ($Days -lt 30) { $StatusColor = "orange" }
+                
+                $CN = if ($cert.Subject -match "CN=([^,]+)") { $Matches[1] } else { $cert.Subject }
+                
+                $StatusDetails += @{ 
+                    Name = $CN
+                    Pills = $pills
+                    Days = $Days
+                    StatusColor = $StatusColor
+                    Expiry = $cert.NotAfter.ToString("dd/MM/yyyy")
+                    Issuer = $cert.Issuer.Replace("CN=", "")
+                }
+            }
+            return @{ Details = $StatusDetails | Sort-Object Days }
+        }
+        catch { return @{ Details = @() } }
+    }
+
+    Log "Collecting $($Svr.Name) (Parallel)..." "Gray"
+    
+    $ExSetupVer = try { Invoke-Command -ComputerName $Svr.Name -ScriptBlock { (Get-Command "C:\Program Files\Microsoft\Exchange Server\V15\bin\ExSetup.exe").FileVersionInfo.FileVersion } -ErrorAction SilentlyContinue } catch { $null }
+    
+    $OS = $null; $Disks = $null; $OSFreePct = $null; $OSFreeGB = $null; $SysDrive = "C:"
+    $CimSession = New-CimSession -ComputerName $Svr.Name -SessionOption (New-CimSessionOption -Protocol Dcom) -ErrorAction SilentlyContinue
+    if ($CimSession) {
+        $OSObj = Get-CimInstance Win32_OperatingSystem -CimSession $CimSession -ErrorAction SilentlyContinue
+        if ($OSObj) {
+            $OS = $OSObj.Caption.Replace("Microsoft ", "")
+            if ($OSObj.SystemDrive) { $SysDrive = $OSObj.SystemDrive }
+        }
+        $Disks = Get-CimInstance Win32_Volume -CimSession $CimSession -ErrorAction SilentlyContinue | Select-Object Name, Capacity, FreeSpace
+        if ($Disks) {
+            $OSDisk = $Disks | Where-Object { $_.Name -like "$SysDrive*" } | Select-Object -First 1
+            if ($OSDisk -and $OSDisk.Capacity -gt 0) {
+                $OSFreePct = ($OSDisk.FreeSpace / $OSDisk.Capacity) * 100
+                $OSFreeGB = $OSDisk.FreeSpace / 1GB
+            }
+        }
+        Remove-CimSession $CimSession
+    }
+
+    $MBStatsByDB = @{}; $ArcStatsByDB = @{}
+    Get-MailboxStatistics -Server $Svr.Name -ErrorAction SilentlyContinue | ForEach-Object {
+        if (!$MBStatsByDB[$_.Database.ToString()]) { $MBStatsByDB[$_.Database.ToString()] = New-Object System.Collections.Generic.List[PSObject] }
+        $MBStatsByDB[$_.Database.ToString()].Add(@{Size = $_.TotalItemSize.Value.ToBytes() })
+    }
+    Get-MailboxStatistics -Server $Svr.Name -Archive -ErrorAction SilentlyContinue | ForEach-Object {
+        if (!$ArcStatsByDB[$_.Database.ToString()]) { $ArcStatsByDB[$_.Database.ToString()] = New-Object System.Collections.Generic.List[PSObject] }
+        $ArcStatsByDB[$_.Database.ToString()].Add(@{Size = $_.TotalItemSize.Value.ToBytes() })
+    }
+
+    $Roles = [array]($Svr.ServerRole.ToString().Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "Mailbox|Edge" })
+    
+    $MBTotal = 0
+    if ($Databases) {
+        $Databases | Where-Object { $_.Server -eq $Svr.Name } | ForEach-Object { 
+            if ($MailboxesByDB -and $MailboxesByDB.ContainsKey($_.Identity.ToString())) { 
+                $MBTotal += $MailboxesByDB[$_.Identity.ToString()].Count 
+            } 
+        }
+    }
+
+    Log "Collected $($Svr.Name) [OK]" "Green"
+    @{Name = $Svr.Name.ToUpper(); DisplayVer = $(if ($Svr.AdminDisplayVersion.Major -eq 15 -and $Svr.AdminDisplayVersion.Minor -eq 1) { "2016" }elseif ($Svr.AdminDisplayVersion.Minor -ge 2) { if ($Svr.AdminDisplayVersion.Build -ge 2500) { "SE" } else { "2019" } } else { "$($Svr.AdminDisplayVersion.Major).$($Svr.AdminDisplayVersion.Minor)" });
+        Build = $(if ($ExSetupVer) { $ExSetupVer } else { $Svr.AdminDisplayVersion.ToString() }); Roles = $Roles; Mailboxes = $MBTotal; OSVersion = ($OS); Disks = $Disks;
+        CertStatus = _GetSSLCertStatus -ServerName $Svr.Name -AuthThumb $AuthThumb; MBStatsByDB = $MBStatsByDB; ArcStatsByDB = $ArcStatsByDB; Site = $Svr.Site.Name;
+        OSFreePct = $OSFreePct; OSFreeGB = $OSFreeGB; OSDiskName = $SysDrive
+    }
+}
+
 foreach ($S in $ExchangeServers) {
-    $Ex = _GetExSvr -Svr $S -MailboxesByDB $MailboxesByDB
-    if ($Ex.Site) { if (!$EnvData.Sites[$Ex.Site]) { $EnvData.Sites[$Ex.Site] = @($Ex) }else { $EnvData.Sites[$Ex.Site] += $Ex } }
+    $PowerShell = [powershell]::Create()
+    $PowerShell.RunspacePool = $RunspacePool
+    [void]$PowerShell.AddScript($CollectionBlock)
+    [void]$PowerShell.AddArgument($S)
+    [void]$PowerShell.AddArgument($MailboxesByDB)
+    [void]$PowerShell.AddArgument($Databases)
+    [void]$PowerShell.AddArgument($GlobalAuthThumb)
+    
+    $Jobs += @{
+        Pipe = $PowerShell
+        Result = $PowerShell.BeginInvoke()
+        Server = $S
+    }
+}
+
+# Wait for completion
+while ($Jobs.Result.IsCompleted -contains $false) {
+    Start-Sleep -Milliseconds 200
+}
+
+# Gather results
+foreach ($Job in $Jobs) {
+    $Ex = $Job.Pipe.EndInvoke($Job.Result)
+    $Job.Pipe.Dispose()
+    
+    if ($null -eq $Ex) {
+        Log "Failed to collect from $($Job.Server.Name) (Parallel). Retrying sequentially..." "Yellow"
+        $Ex = _GetExSvr -Svr $Job.Server -MailboxesByDB $MailboxesByDB -Databases $Databases -AuthThumb $GlobalAuthThumb
+    }
+
+    if ($Ex.Site) { 
+        if (!$EnvData.Sites[$Ex.Site]) { 
+            $EnvData.Sites[$Ex.Site] = @($Ex) 
+        } else { 
+            $EnvData.Sites[$Ex.Site] += $Ex 
+        } 
+    }
     $EnvData.Servers[$Ex.Name] = $Ex
 }
+
+$RunspacePool.Close()
+
 foreach ($D in $Databases) { $EnvData.DBs += _GetDB -Database $D -ExSvrData $EnvData.Servers[$D.Server.Name] -MailboxesByDB $MailboxesByDB -ArchivesByDB $ArchivesByDB }
 
 # --- KPI CALCULATIONS ---
