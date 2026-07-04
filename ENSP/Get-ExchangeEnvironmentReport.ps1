@@ -555,11 +555,6 @@ $Output = @"
     <p>Infrastructure &bull; $ReportDate &bull; v3.1</p>
 </div>
 <div class="container">
-    <div class="tabs-nav">
-        <button class="tab-btn active" onclick="openTab(event, 'tab-infra')">Infrastructure</button>
-        <button class="tab-btn" onclick="openTab(event, 'tab-mailboxes')">Boites aux lettres</button>
-    </div>
-    
     <div id="tab-infra" class="tab-content" style="display:block;">
         <div class="dashboard">
             <div class="card"><h2>$TotalMB</h2><p>Active Mailboxes</p></div>
@@ -650,6 +645,12 @@ if ($SkipMailboxStats) {
 
 $Output += "</tbody></table></div>" # Close Database Status table and tab-infra div
 $Output += "<div id='tab-mailboxes' class='tab-content' style='display:none;'>$MailboxTabHTML</div>" # Add tab-mailboxes content and div
+$Output += @"
+    <div class="tabs-nav" style="margin-top: 25px; margin-bottom: 0; border-top: 2px solid #eee; border-bottom: none; padding-top: 15px; padding-bottom: 0;">
+        <button class="tab-btn active" onclick="openTab(event, 'tab-infra')">Infrastructure</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-mailboxes')">Boites aux lettres</button>
+    </div>
+"@
 $Output += "</div>" # Close container div
 $Output += "<div class='footer'>&copy; $(Get-Date -Format 'yyyy') $CompanyLogo - $ReportTitle | v3.1</div></body></html>"
 $Output | Out-File $HTMLReport -Encoding utf8
