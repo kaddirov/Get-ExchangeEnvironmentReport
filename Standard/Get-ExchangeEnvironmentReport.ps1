@@ -180,7 +180,7 @@ function _RenderMbxTable {
     }
     $tbl += "<table id='$Tid'><thead><tr><th>Nom d'affichage</th><th>Taille</th><th>Statut de limite</th><th>Base de donnees</th><th>Serveur</th></tr></thead><tbody>"
     foreach ($m in $List) {
-        $statusCol = if ($m.LimitStatus -match "Prohibit|Exceeded") { "color:#d32f2f; font-weight:bold;" } else { "" }
+        $statusCol = if ($m.LimitStatus -match "Prohibit|Exceeded") { "color:#d32f2f; font-weight:bold;" } elseif ($m.LimitStatus -match "Warning") { "color:#ff9800; font-weight:bold;" } else { "" }
         $tbl += "<tr>
         <td align='left'><b>$($m.DisplayName)</b></td>
         <td>$('{0:N2}' -f ($m.Size/1GB)) GB</td>
@@ -622,13 +622,18 @@ if ($SkipMailboxStats) {
 } else {
     $Top10Mbx = $AllMailboxes | Sort-Object Size -Descending | Select-Object -First 10
     $FullMbx = $AllMailboxes | Where-Object { $_.LimitStatus -match "Prohibit|Exceeded" }
+    $WarningMbx = $AllMailboxes | Where-Object { $_.LimitStatus -match "Warning" }
+    
     $Top10Arc = $AllArchives | Sort-Object Size -Descending | Select-Object -First 10
     $FullArc = $AllArchives | Where-Object { $_.LimitStatus -match "Prohibit|Exceeded" }
+    $WarningArc = $AllArchives | Where-Object { $_.LimitStatus -match "Warning" }
     
     $MailboxTabHTML += _RenderMbxTable -Title "Top 10 - Grosses Boites aux Lettres" -List $Top10Mbx -Tid "t_top10mbx"
     $MailboxTabHTML += _RenderMbxTable -Title "Boites aux Lettres Pleines (Limite depassee)" -List $FullMbx -Tid "t_fullmbx"
+    $MailboxTabHTML += _RenderMbxTable -Title "Boites aux Lettres sous Avertissement (Warning)" -List $WarningMbx -Tid "t_warnmbx"
     $MailboxTabHTML += _RenderMbxTable -Title "Top 10 - Grosses Boites d'Archives" -List $Top10Arc -Tid "t_top10arc"
     $MailboxTabHTML += _RenderMbxTable -Title "Boites d'Archives Pleines (Limite depassee)" -List $FullArc -Tid "t_fullarc"
+    $MailboxTabHTML += _RenderMbxTable -Title "Boites d'Archives sous Avertissement (Warning)" -List $WarningArc -Tid "t_warnarc"
 }
 
 $Output += "</tbody></table></div>" # Close Database Status table and tab-infra div
