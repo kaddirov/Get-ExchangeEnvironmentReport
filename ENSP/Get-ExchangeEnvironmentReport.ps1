@@ -13,7 +13,8 @@ param(
     [parameter(Position = 5)][string]$ServerFilter = "*",
     [string]$CompanyLogo = "EXCHANGE",
     [string]$ReportTitle = "REPORTING",
-    [string]$ThemeColor = "#F27A00"
+    [string]$ThemeColor = "#F27A00",
+    [switch]$SkipMailboxStats
 )
 $Global:Sw = [System.Diagnostics.Stopwatch]::StartNew()
 function Log($Msg, $Color = "White") { Write-Host "[$($Global:Sw.Elapsed.ToString("mm\:ss"))] $Msg" -ForegroundColor $Color -NoNewline:$false }
@@ -114,13 +115,15 @@ function _GetExSvr {
 
     # Bulk Stats Collection
     $MBStatsByDB = @{}; $ArcStatsByDB = @{}
-    Get-MailboxStatistics -Server $Svr.Name -ErrorAction SilentlyContinue | ForEach-Object {
-        if (!$MBStatsByDB[$_.Database.ToString()]) { $MBStatsByDB[$_.Database.ToString()] = New-Object System.Collections.Generic.List[PSObject] }
-        $MBStatsByDB[$_.Database.ToString()].Add(@{Size = $_.TotalItemSize.Value.ToBytes() })
-    }
-    Get-MailboxStatistics -Server $Svr.Name -Archive -ErrorAction SilentlyContinue | ForEach-Object {
-        if (!$ArcStatsByDB[$_.Database.ToString()]) { $ArcStatsByDB[$_.Database.ToString()] = New-Object System.Collections.Generic.List[PSObject] }
-        $ArcStatsByDB[$_.Database.ToString()].Add(@{Size = $_.TotalItemSize.Value.ToBytes() })
+    if (!$SkipMailboxStats) {
+        Get-MailboxStatistics -Server $Svr.Name -ErrorAction SilentlyContinue | ForEach-Object {
+            if (!$MBStatsByDB[$_.Database.ToString()]) { $MBStatsByDB[$_.Database.ToString()] = New-Object System.Collections.Generic.List[PSObject] }
+            $MBStatsByDB[$_.Database.ToString()].Add(@{Size = $_.TotalItemSize.Value.ToBytes() })
+        }
+        Get-MailboxStatistics -Server $Svr.Name -Archive -ErrorAction SilentlyContinue | ForEach-Object {
+            if (!$ArcStatsByDB[$_.Database.ToString()]) { $ArcStatsByDB[$_.Database.ToString()] = New-Object System.Collections.Generic.List[PSObject] }
+            $ArcStatsByDB[$_.Database.ToString()].Add(@{Size = $_.TotalItemSize.Value.ToBytes() })
+        }
     }
 
     $Roles = [array]($Svr.ServerRole.ToString().Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "Mailbox|Edge" })
@@ -528,8 +531,11 @@ foreach ($D in $EnvData.DBs) {
     $pctDB = $D.FreeDatabaseDiskSpace; $colDB = if ($pctDB -lt 10) { "#d32f2f" }elseif ($pctDB -lt 20) { "#ff9800" }else { "#2e7d32" }
     $pctLog = $D.FreeLogDiskSpace; $colLog = if ($pctLog -lt 10) { "#d32f2f" }elseif ($pctLog -lt 20) { "#ff9800" }else { "#2e7d32" }
 
+    $AvgMBSizeHTML = if ($SkipMailboxStats) { "N/A" } else { "$('{0:N2}' -f ($D.MailboxAverageSize/1GB)) GB" }
+    $AvgArcSizeHTML = if ($SkipMailboxStats) { "N/A" } else { "$('{0:N2}' -f ($D.ArchiveAverageSize/1GB)) GB" }
+
     $Output += "<tr><td>$($D.ActiveOwner)</td><td align='left'>$($D.Name)</td><td>$($D.MailboxCount)</td>
-    <td>$('{0:N2}' -f ($D.MailboxAverageSize/1GB)) GB</td><td>$($D.ArchiveMailboxCount)</td><td>$('{0:N2}' -f ($D.ArchiveAverageSize/1GB)) GB</td>
+    <td>$AvgMBSizeHTML</td><td>$($D.ArchiveMailboxCount)</td><td>$AvgArcSizeHTML</td>
     <td style='font-weight:bold;'>$('{0:N2}' -f ($D.Size/1GB)) GB</td><td>$('{0:N2}' -f ($D.Whitespace/1GB)) GB</td>
     <td><div class='progress-container'><div class='progress-bg'><div class='progress-bar' style='width:$($pctDB)%;background:$colDB;'></div></div><div class='progress-text'>$('{0:N0}' -f $pctDB)%</div></div></td>
     <td><div class='progress-container'><div class='progress-bg'><div class='progress-bar' style='width:$($pctLog)%;background:$colLog;'></div></div><div class='progress-text'>$('{0:N0}' -f $pctLog)%</div></div></td>
