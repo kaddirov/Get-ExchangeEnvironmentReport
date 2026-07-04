@@ -616,11 +616,11 @@ foreach ($D in $EnvData.DBs) {
     <td><div class='progress-container'><div class='progress-bg'><div class='progress-bar' style='width:$($pctLog)%;background:$colLog;'></div></div><div class='progress-text'>$('{0:N0}' -f $pctLog)%</div></div></td>
     <td style='font-size:8pt;color:#666;'>$($D.LastFullBackup)</td></tr>"
 }
-$AllMailboxes = @()
-$AllArchives = @()
+$AllMailboxes = New-Object System.Collections.Generic.List[PSObject]
+$AllArchives = New-Object System.Collections.Generic.List[PSObject]
 foreach ($S in $EnvData.Servers.Values) {
-    if ($S.MailboxDetails) { $AllMailboxes += $S.MailboxDetails }
-    if ($S.ArchiveDetails) { $AllArchives += $S.ArchiveDetails }
+    if ($S.MailboxDetails) { $AllMailboxes.AddRange($S.MailboxDetails) }
+    if ($S.ArchiveDetails) { $AllArchives.AddRange($S.ArchiveDetails) }
 }
 
 $MailboxTabHTML = ""
