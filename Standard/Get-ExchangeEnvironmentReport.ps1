@@ -105,10 +105,22 @@ function _GetExSvr {
     $ExSetupVer = try { Invoke-Command -ComputerName $Svr.Name -ScriptBlock { (Get-Command "C:\Program Files\Microsoft\Exchange Server\V15\bin\ExSetup.exe").FileVersionInfo.FileVersion } -ErrorAction SilentlyContinue } catch { $null }
     
     # CIM Info
+    $OS = $null; $Disks = $null; $OSFreePct = $null; $OSFreeGB = $null; $SysDrive = "C:"
     $CimSession = New-CimSession -ComputerName $Svr.Name -SessionOption (New-CimSessionOption -Protocol Dcom) -ErrorAction SilentlyContinue
     if ($CimSession) {
-        $OS = (Get-CimInstance Win32_OperatingSystem -CimSession $CimSession -ErrorAction SilentlyContinue).Caption.Replace("Microsoft ", "")
+        $OSObj = Get-CimInstance Win32_OperatingSystem -CimSession $CimSession -ErrorAction SilentlyContinue
+        if ($OSObj) {
+            $OS = $OSObj.Caption.Replace("Microsoft ", "")
+            if ($OSObj.SystemDrive) { $SysDrive = $OSObj.SystemDrive }
+        }
         $Disks = Get-CimInstance Win32_Volume -CimSession $CimSession -ErrorAction SilentlyContinue | Select-Object Name, Capacity, FreeSpace
+        if ($Disks) {
+            $OSDisk = $Disks | Where-Object { $_.Name -like "$SysDrive*" } | Select-Object -First 1
+            if ($OSDisk -and $OSDisk.Capacity -gt 0) {
+                $OSFreePct = ($OSDisk.FreeSpace / $OSDisk.Capacity) * 100
+                $OSFreeGB = $OSDisk.FreeSpace / 1GB
+            }
+        }
         Remove-CimSession $CimSession
     }
 
@@ -129,7 +141,8 @@ function _GetExSvr {
     Write-Host " [OK]" -ForegroundColor Green
     @{Name = $Svr.Name.ToUpper(); DisplayVer = $(if ($Svr.AdminDisplayVersion.Major -eq 15 -and $Svr.AdminDisplayVersion.Minor -eq 1) { "2016" }elseif ($Svr.AdminDisplayVersion.Minor -ge 2) { if ($Svr.AdminDisplayVersion.Build -ge 2500) { "SE" } else { "2019" } } else { "$($Svr.AdminDisplayVersion.Major).$($Svr.AdminDisplayVersion.Minor)" });
         Build = $(if ($ExSetupVer) { $ExSetupVer } else { $Svr.AdminDisplayVersion.ToString() }); Roles = $Roles; Mailboxes = $MBTotal; OSVersion = ($OS); Disks = $Disks;
-        CertStatus = _GetSSLCertStatus -ServerName $Svr.Name; MBStatsByDB = $MBStatsByDB; ArcStatsByDB = $ArcStatsByDB; Site = $Svr.Site.Name 
+        CertStatus = _GetSSLCertStatus -ServerName $Svr.Name; MBStatsByDB = $MBStatsByDB; ArcStatsByDB = $ArcStatsByDB; Site = $Svr.Site.Name;
+        OSFreePct = $OSFreePct; OSFreeGB = $OSFreeGB; OSDiskName = $SysDrive
     }
 }
 
@@ -361,7 +374,7 @@ foreach ($Site in $EnvData.Sites.GetEnumerator()) {
     $Output += "<h3>Site: $($Site.Key)</h3><table id='$tid'><thead><tr>
     <th>Server</th><th>Version</th><th>Build</th>
     <th>Roles</th><th>Mailboxes</th><th>Certificate</th>
-    <th>OS</th></tr></thead><tbody>"
+    <th>OS</th><th>OS Free Space</th></tr></thead><tbody>"
     foreach ($S in $Site.Value) {
         $CertHTML = "<div class='cert-container'>"
         foreach ($c in $S.CertStatus.Details) {
@@ -375,8 +388,16 @@ foreach ($Site in $EnvData.Sites.GetEnumerator()) {
             $CertHTML += "</div>"
         }
         $CertHTML += "</div>"
+        
+        $OSFreeHTML = "N/A"
+        if ($null -ne $S.OSFreePct) {
+            $pctOS = $S.OSFreePct
+            $colOS = if ($pctOS -lt 10) { "#d32f2f" }elseif ($pctOS -lt 20) { "#ff9800" }else { "#2e7d32" }
+            $OSFreeHTML = "<div class='progress-container'><div class='progress-bg'><div class='progress-bar' style='width:$($pctOS)%;background:$colOS;'></div></div><div class='progress-text'>$('{0:N0}' -f $pctOS)%</div></div>"
+        }
+
         $Output += "<tr><td><b>$($S.Name)</b></td><td>$($S.DisplayVer)</td><td style='font-size:8pt;'>$($S.Build)</td><td>$($S.Roles -join "<br>")</td>
-        <td>$($S.Mailboxes)</td><td>$CertHTML</td><td style='font-size:8pt;'>$($S.OSVersion)</td></tr>"
+        <td>$($S.Mailboxes)</td><td>$CertHTML</td><td style='font-size:8pt;'>$($S.OSVersion)</td><td>$OSFreeHTML</td></tr>"
     }
     $Output += "</tbody></table>"
 }
